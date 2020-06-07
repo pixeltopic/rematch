@@ -59,6 +59,10 @@ func TestExpr(t *testing.T) {
 			input: "(hi)|((guys+hows+it+goin))",
 			expr:  "(hi)|((guys+hows+it+goin))",
 		},
+		{
+			input: "(**)",
+			expr:  "(*)",
+		},
 	}
 
 	for i, entry := range table {
