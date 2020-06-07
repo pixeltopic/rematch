@@ -8,10 +8,15 @@ type Queue struct {
 }
 
 // NewQueue creates a new queue
-func NewQueue(s ...string) *Queue {
+func NewQueue() *Queue {
 	return &Queue{
 		queue: []string{},
 	}
+}
+
+// Len returns the length of the queue
+func (q *Queue) Len() int {
+	return len(q.queue)
 }
 
 // Join joins the string with a given separator
@@ -48,10 +53,15 @@ type Stack struct {
 }
 
 // NewStack creates a new stack
-func NewStack(s ...string) *Stack {
+func NewStack() *Stack {
 	return &Stack{
 		stack: []string{},
 	}
+}
+
+// Len returns the length of the stack
+func (st *Stack) Len() int {
+	return len(st.stack)
 }
 
 // Push a string, will be false if stack was improperly initialized

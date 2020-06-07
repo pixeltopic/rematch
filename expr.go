@@ -10,34 +10,22 @@ import (
 	"strings"
 )
 
+// expression operators
+const (
+	OPAND           = '+'
+	OPOR            = '|'
+	OPGROUPL        = '('
+	OPGROUPR        = ')'
+	OPWILDCARDAST   = '*'
+	OPWILDCARDQUEST = '?'
+)
+
 // Expr is an expression written in requery.
 type Expr struct {
 	raw      string
 	regex    regexp.Regexp
 	compiled bool
 }
-
-var _ = `
-while there are tokens to be read do:
-    read a token. (basically, any character that is not a parenthesis. what if the first char is a paren?)
-    if the token is an element, then:
-        do validation and replacements; (may need to lookahead if it ends or starts with an AND/OR operator)
-        push it to the output queue.     
-    else if the token is a left parenthesis, then:
-        push it onto the operator stack.
-    else if the token is a right parenthesis, then:
-        while the operator at the top of the operator stack is not a left parenthesis:
-            pop the operator from the operator stack onto the output queue.
-        /* If the stack runs out without finding a left parenthesis, then there are mismatched parentheses. */
-        if there is a left parenthesis at the top of the operator stack, then:
-            pop the operator from the operator stack and discard it
-/* After while loop, if operator stack not null, pop everything to output queue */
-if there are no more tokens to read then:
-    while there are still operator tokens on the stack:
-        /* If the operator token on the top of the stack is a parenthesis, then there are mismatched parentheses. */
-        pop the operator from the operator stack onto the output queue.
-exit.
-`
 
 func isInfix(idx int, raw string) (ok bool) {
 	if idx > len(raw) {
@@ -83,7 +71,7 @@ func isInfix(idx int, raw string) (ok bool) {
 // does NOT: check that * and ? operators are used in conjunction with a word (probably does now)
 // check for well formed parenthesis
 // check AND OR operator ambiguity
-// TODO: what if input is just a single operator? like ?, *, (, ). These 4 may need to be parsed in shunt algorithm.
+// TODO: what if input is a single paren? (, ), or empty group? () (()) ()(()) shuntingYard should handle
 func reduceHelper(raw string) (string, error) {
 	if len(raw) == 0 {
 		return "", errors.New("empty raw query")
@@ -107,10 +95,14 @@ func reduceHelper(raw string) (string, error) {
 
 	for ; x < len(raw); x++ {
 		switch char := rune(raw[x]); char {
-		case ')':
+		case OPGROUPR:
 			// cannot be preceded by an operator
 			if opCountX > 0 {
 				return sb.String(), errors.New("dangling operator")
+			}
+
+			if sb.Len() != 0 && prevCharX == OPGROUPL {
+				return sb.String(), errors.New("empty group")
 			}
 
 			sb.WriteRune(char)
@@ -119,14 +111,14 @@ func reduceHelper(raw string) (string, error) {
 			}
 			curWord.Reset()
 			wordStarted, adjAst = false, false
-		case '(':
-			// must be preceded by an operator
+		case OPGROUPL:
+			// must be preceded by an infix operator
 
 			// ((would be ok)) &(kekw) is not
 			if opCountX != 1 && sb.Len() != 0 {
 				switch prevCharX {
-				case '(':
-				case ')':
+				case OPGROUPL: // e.g. (((( is fine
+				case OPGROUPR: // e.g. |) and +)
 					fallthrough
 				default:
 					return sb.String(), errors.New("invalid consecutive operators preceding left parenthesis")
@@ -138,23 +130,23 @@ func reduceHelper(raw string) (string, error) {
 			}
 			curWord.Reset()
 			wordStarted, adjAst = false, false
-		case '*':
+		case OPWILDCARDAST:
 			// if consecutive, replace with single *.
-			// TODO: verify that it is in conjunction with a word
 			if !adjAst {
+				opCountX = 0
 				sb.WriteRune(char)
 				curWord.WriteRune(char)
 				wordStarted, adjAst = true, true
 			}
-		case '?':
-			// TODO: verify that it is in conjunction with a word
+		case OPWILDCARDQUEST:
+			opCountX = 0
 			adjAst = false
 			sb.WriteRune(char)
 			curWord.WriteRune(char)
 			wordStarted = true
-		case '+':
+		case OPAND:
 			fallthrough
-		case '|':
+		case OPOR:
 			// cannot be consecutive (nor exist on same depth as OR, but cannot check here)
 			if !isInfix(x, raw) {
 				return sb.String(), fmt.Errorf("'%s' operator was not infix", string(char))
@@ -221,85 +213,81 @@ func reduceExpr(raw string) (string, error) {
 }
 
 func shuntingYard(raw string) (string, error) {
-
-	// dangling operator verification pass; if an operator is ([+|] and [+|]) = invalid, but [+|]( and )[+|] valid. (remember consecutive danglings are still bad)
-	// also good chance to validate allowed chars
-	// reduce adjacent * wildcards to a single *
-
-	//if err := verify(raw); err != nil {
-	//	return "", err
-	//}
-
-	temp := raw // this may get shorter and shorter...
-
 	opStack := utils.NewStack()
 	outQueue := utils.NewQueue()
 
-	for len(temp) != 0 {
+	var token strings.Builder
 
-		token := returnIfParen(temp)
-		if token != ")" && token != "(" {
-			token = untilParen(temp)
-		}
-
-		switch token {
-		case "(":
-			// done
-			_ = opStack.Push("(")
-		case ")":
-			for {
-				ele, ok := opStack.Peek()
-				if !ok || ele == "(" {
-					_, _ = opStack.Pop()
-					break
+	for len(raw) != 0 {
+		token.Reset()
+	tokenLoop:
+		for i := 0; i < len(raw); i++ {
+			switch char := rune(raw[i]); char {
+			case OPGROUPL:
+				fallthrough
+			case OPGROUPR:
+				token.WriteRune(char)
+				break tokenLoop
+			default:
+				token.WriteRune(char)
+				if i+1 < len(raw) { // lookahead and break out of labeled loop if next is a GROUP operator
+					if raw[i+1] == OPGROUPL || raw[i+1] == OPGROUPR {
+						break tokenLoop
+					}
 				}
-				ele, ok = opStack.Pop()
-				if !ok {
-					return "", errors.New("mismatched parenthesis")
-				}
-				_ = outQueue.Enqueue(ele)
 			}
+		}
+		raw = raw[len(token.String()):]
+
+		switch tok := token.String(); tok {
+		case string(OPGROUPL):
+			opStack.Push(string(OPGROUPL))
+			outQueue.Enqueue(tok)
+		case string(OPGROUPR):
+			res, ok := opStack.Pop()
+			if !ok || res != string(OPGROUPL) {
+				return outQueue.Join(""), errors.New("mismatched parenthesis")
+			}
+			outQueue.Enqueue(tok)
 		default:
-			// do replacements and any leftover validation
+			// do replacements and check ambiguity. identify delimiter.
 			// push it to the output queue.
+			outQueue.Enqueue(tok)
 		}
 
-		temp = temp[len(token):]
+		//switch tok := token.String(); tok {
+		//case string(OPGROUPL):
+		//	_ = opStack.Push("(")
+		//case string(OPGROUPR):
+		//	for {
+		//		ele, ok := opStack.Peek()
+		//		if !ok || ele == "(" {
+		//			_, _ = opStack.Pop()
+		//			break
+		//		}
+		//		ele, ok = opStack.Pop()
+		//		if !ok {
+		//			return "", errors.New("mismatched parenthesis")
+		//		}
+		//		_ = outQueue.Enqueue(ele)
+		//	}
+		//default:
+		//	// do replacements check ambiguity
+		//	// push it to the output queue.
+		//	outQueue.Enqueue(tok)
+		//}
 	}
 	/* After while loop, if operator stack not null, pop everything to output queue */
+	//for opStack.Len() > 0 {
+	//	ele, _ := opStack.Pop()
+	//	_ = outQueue.Enqueue(ele)
+	//}
 
-	return utils.NewQueue().Join(""), nil
-}
-
-func returnIfParen(s string) string {
-	if strings.HasPrefix(s, ")") {
-		return ")"
-	}
-	if strings.HasPrefix(s, "(") {
-		return "("
-	}
-	return ""
-}
-
-// returns the string until a paren (but not including it). If the first char is a paren, will return empty string
-func untilParen(s string) string {
-	left := strings.Index(s, "(")
-	right := strings.Index(s, ")")
-
-	// shortest idx gets returned
-	if right > left {
-		if left == -1 {
-			return s[:right]
-		}
-		return s[:left]
-	} else if left > right {
-		if right == -1 {
-			return s[:left]
-		}
-		return s[:right]
+	if opStack.Len() > 0 {
+		return outQueue.Join(""), errors.New("mismatched parenthesis")
 	}
 
-	return s
+	return outQueue.Join(""), nil
 }
 
 func allowedWordChars(c rune) bool {
