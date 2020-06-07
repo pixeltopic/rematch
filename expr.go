@@ -2,6 +2,7 @@ package requery
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 
 	"github.com/pixeltopic/requery/utils"
@@ -38,23 +39,71 @@ if there are no more tokens to read then:
 exit.
 `
 
-// verify provided raw string that operators are placed properly;
-// but does NOT: check that * and ? operators are used in conjunction with a word
+func isInfix(idx int, raw string) (ok bool) {
+	if idx > len(raw) {
+		return
+	}
+
+	max := len(raw) - 1
+
+	switch raw[idx] {
+	case '|':
+		fallthrough
+	case '+':
+		prev := idx - 1
+		next := idx + 1
+
+		if prev < 0 || next > max {
+			return
+		}
+		switch raw[next] {
+		case '+':
+			fallthrough
+		case '|':
+			return
+		default:
+			ok = true
+		}
+
+		switch raw[prev] {
+		case '+':
+			fallthrough
+		case '|':
+			ok = false
+			return
+		default:
+			return
+		}
+	}
+
+	return
+}
+
+// reduceHelper does a limited verification on the provided raw string.
+// does NOT: check that * and ? operators are used in conjunction with a word (probably does now)
 // check for well formed parenthesis
 // check AND OR operator ambiguity
-// TODO: what if input is just a single operator? like ?, *, +, |, (, ). VERIFY INFIX
-// TODO: this should be called twice to properly verify; the second time with the raw string reversed
+// TODO: what if input is just a single operator? like ?, *, (, ). These 4 may need to be parsed in shunt algorithm.
 func reduceHelper(raw string) (string, error) {
 	if len(raw) == 0 {
 		return "", errors.New("empty raw query")
 	}
 
 	var (
-		x, opCountX int             // character of expression and how many consecutive operations exist; if over 1, invalid
-		sb          strings.Builder // builds the reduced query
-		adjAst      bool            // checks if adjacent to asterisk
-		prevCharX   rune            // one character lookback, will be zero value if first character
+		x, opCountX         int             // character of expression and how many consecutive operations exist; if over 1, invalid
+		sb, curWord         strings.Builder // builds the reduced query and keeps track of word state
+		adjAst, wordStarted bool            // checks if adjacent to asterisk
+		prevCharX           rune            // one character lookback, will be zero value if first character
 	)
+
+	isAWord := func(word string) bool {
+		for _, c := range word {
+			if allowedWordChars(c) {
+				return true
+			}
+		}
+		return false
+	}
 
 	for ; x < len(raw); x++ {
 		switch char := rune(raw[x]); char {
@@ -63,8 +112,13 @@ func reduceHelper(raw string) (string, error) {
 			if opCountX > 0 {
 				return sb.String(), errors.New("dangling operator")
 			}
-			adjAst = false
-			sb.WriteString(")")
+
+			sb.WriteRune(char)
+			if !isAWord(curWord.String()) && wordStarted {
+				return sb.String(), errors.New("invalid word")
+			}
+			curWord.Reset()
+			wordStarted, adjAst = false, false
 		case '(':
 			// must be preceded by an operator
 
@@ -78,40 +132,57 @@ func reduceHelper(raw string) (string, error) {
 					return sb.String(), errors.New("invalid consecutive operators preceding left parenthesis")
 				}
 			}
-			adjAst = false
-			sb.WriteString("(")
+			sb.WriteRune(char)
+			if !isAWord(curWord.String()) && wordStarted {
+				return sb.String(), errors.New("invalid word")
+			}
+			curWord.Reset()
+			wordStarted, adjAst = false, false
 		case '*':
 			// if consecutive, replace with single *.
-			// TODO: verify infix
+			// TODO: verify that it is in conjunction with a word
 			if !adjAst {
-				sb.WriteString("*")
-				adjAst = true
+				sb.WriteRune(char)
+				curWord.WriteRune(char)
+				wordStarted, adjAst = true, true
 			}
 		case '?':
-			// TODO: verify infix
+			// TODO: verify that it is in conjunction with a word
 			adjAst = false
-			sb.WriteString("?")
+			sb.WriteRune(char)
+			curWord.WriteRune(char)
+			wordStarted = true
 		case '+':
-			// cannot be consecutive (nor exist on same depth as OR, but cannot check here)
-			sb.WriteString("+")
-			adjAst = false
-			opCountX++
+			fallthrough
 		case '|':
-			// cannot be consecutive
-			sb.WriteString("|")
-			adjAst = false
+			// cannot be consecutive (nor exist on same depth as OR, but cannot check here)
+			if !isInfix(x, raw) {
+				return sb.String(), fmt.Errorf("'%s' operator was not infix", string(char))
+			}
+			sb.WriteRune(char)
 			opCountX++
+			if !isAWord(curWord.String()) && wordStarted {
+				return sb.String(), errors.New("invalid word")
+			}
+			curWord.Reset()
+			wordStarted, adjAst = false, false
 		default:
 			// it's part of a /bword/b
 			opCountX = 0
 			adjAst = false
-			// check if valid character (alphanumeric)
-
-			// if it is...
+			wordStarted = true
+			if !allowedWordChars(char) {
+				return sb.String(), errors.New("word contained non alphanumeric character")
+			}
 			sb.WriteRune(char)
+			curWord.WriteRune(char)
 		}
 
 		prevCharX = rune(raw[x])
+	}
+
+	if !isAWord(curWord.String()) && wordStarted {
+		return sb.String(), errors.New("invalid word")
 	}
 
 	return sb.String(), nil
@@ -161,6 +232,9 @@ func shuntingYard(raw string) (string, error) {
 
 	temp := raw // this may get shorter and shorter...
 
+	opStack := utils.NewStack()
+	outQueue := utils.NewQueue()
+
 	for len(temp) != 0 {
 
 		token := returnIfParen(temp)
@@ -170,7 +244,21 @@ func shuntingYard(raw string) (string, error) {
 
 		switch token {
 		case "(":
+			// done
+			_ = opStack.Push("(")
 		case ")":
+			for {
+				ele, ok := opStack.Peek()
+				if !ok || ele == "(" {
+					_, _ = opStack.Pop()
+					break
+				}
+				ele, ok = opStack.Pop()
+				if !ok {
+					return "", errors.New("mismatched parenthesis")
+				}
+				_ = outQueue.Enqueue(ele)
+			}
 		default:
 			// do replacements and any leftover validation
 			// push it to the output queue.
@@ -212,4 +300,10 @@ func untilParen(s string) string {
 	}
 
 	return s
+}
+
+func allowedWordChars(c rune) bool {
+	return ('a' <= c && c <= 'z') ||
+		('A' <= c && c <= 'Z') ||
+		('0' <= c && c <= '9')
 }

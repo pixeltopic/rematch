@@ -12,12 +12,24 @@ func TestExpr(t *testing.T) {
 		err   error
 	}{
 		{
-			input: "((hithe***re))",
-			expr:  "((hithe*re))",
+			input: "((hi?the***re))",
+			expr:  "((hi?the*re))",
 		},
 		{
-			input: "+kekw+",
-			expr:  "+kekw+",
+			input: "k+|+kekw+",
+			expr:  "k",
+		},
+		{
+			input: "kkekw|(foobar)",
+			expr:  "kkekw|(foobar)",
+		},
+		{
+			input: "|",
+			expr:  "",
+		},
+		{
+			input: "*",
+			expr:  "*",
 		},
 	}
 
