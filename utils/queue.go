@@ -77,3 +77,15 @@ func (st *Stack) Pop() (s string, ok bool) {
 	}
 	return
 }
+
+// Peek at the most recent element
+func (st *Stack) Peek() (s string, ok bool) {
+	if st.stack == nil {
+		return
+	}
+	for len(st.stack) > 0 {
+		n := len(st.stack) - 1
+		return st.stack[n], true
+	}
+	return
+}
