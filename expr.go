@@ -68,10 +68,10 @@ func isInfix(idx int, raw string) (ok bool) {
 }
 
 // reduceHelper does a limited verification on the provided raw string.
-// does NOT: check that * and ? operators are used in conjunction with a word (probably does now)
+// does NOT:
 // check for well formed parenthesis
 // check AND OR operator ambiguity
-// TODO: what if input is a single paren? (, ), or empty group? () (()) ()(()) shuntingYard should handle
+// TODO: what if input is a single paren? (, ), or empty group? () (()) ()(()) toRegex should handle
 func reduceHelper(raw string) (string, error) {
 	if len(raw) == 0 {
 		return "", errors.New("empty raw query")
@@ -212,7 +212,7 @@ func reduceExpr(raw string) (string, error) {
 	return out, err
 }
 
-func shuntingYard(raw string) (string, error) {
+func toRegex(raw string) (string, error) {
 	opStack := utils.NewStack()
 	outQueue := utils.NewQueue()
 
@@ -254,40 +254,23 @@ func shuntingYard(raw string) (string, error) {
 			// push it to the output queue.
 			outQueue.Enqueue(tok)
 		}
-
-		//switch tok := token.String(); tok {
-		//case string(OPGROUPL):
-		//	_ = opStack.Push("(")
-		//case string(OPGROUPR):
-		//	for {
-		//		ele, ok := opStack.Peek()
-		//		if !ok || ele == "(" {
-		//			_, _ = opStack.Pop()
-		//			break
-		//		}
-		//		ele, ok = opStack.Pop()
-		//		if !ok {
-		//			return "", errors.New("mismatched parenthesis")
-		//		}
-		//		_ = outQueue.Enqueue(ele)
-		//	}
-		//default:
-		//	// do replacements check ambiguity
-		//	// push it to the output queue.
-		//	outQueue.Enqueue(tok)
-		//}
 	}
-	/* After while loop, if operator stack not null, pop everything to output queue */
-	//for opStack.Len() > 0 {
-	//	ele, _ := opStack.Pop()
-	//	_ = outQueue.Enqueue(ele)
-	//}
 
 	if opStack.Len() > 0 {
 		return outQueue.Join(""), errors.New("mismatched parenthesis")
 	}
 
 	return outQueue.Join(""), nil
+}
+
+// Transpile converts a requery expression into regex
+func Transpile(raw string) (string, error) {
+	expr, err := reduceExpr(raw)
+	if err != nil {
+		return expr, err
+	}
+
+	return toRegex(expr)
 }
 
 func allowedWordChars(c rune) bool {

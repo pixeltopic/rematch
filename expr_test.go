@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TODO: split up valid and invalid test cases
 func TestExpr(t *testing.T) {
 	table := []struct {
 		input string
@@ -93,11 +94,12 @@ func TestShunting(t *testing.T) {
 		//	input: "((hi?the*re+(foo|bar)))())", // not sure what reduceExpr will do near the end here.
 		//	expr:  "((hi?the*re+(foo|bar)))",
 		//},
+		// also test '('
 	}
 
 	for i, entry := range table {
 		t.Run("test shunting", func(t *testing.T) {
-			out, err := shuntingYard(entry.input)
+			out, err := Transpile(entry.input)
 
 			if out != entry.expr {
 				t.Errorf("shunt test #%d: exprs not equal; actual expr=%s expected expr=%s", i+1, out, entry.expr)
