@@ -39,10 +39,21 @@ func (q *Queue) Dequeue() (s string, ok bool) {
 		return
 	}
 	for len(q.queue) > 0 {
-		q.queue = q.queue[1:]
 		s = q.queue[0]
 		q.queue[0] = ""
+		q.queue = q.queue[1:]
 		return s, true
+	}
+	return
+}
+
+// Peek at the most oldest element
+func (q *Queue) Peek() (s string, ok bool) {
+	if q.queue == nil {
+		return
+	}
+	for len(q.queue) > 0 {
+		return q.queue[0], true
 	}
 	return
 }
