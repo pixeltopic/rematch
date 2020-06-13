@@ -1,20 +1,18 @@
-# requery
+# Requery
 
-Requery is a basic, stripped down query language which translates into regex.
+Requery is a basic, stripped down query language that matches against strings.
 
-Grammar
-- `|` or
-- `+` and
-- `*` wildcard (0 to n)
-- `?` wildcard (0 to 1)
+A Requery expression is composed of alphanumeric, case sensitive "words" to be matched against another set of words.
+A "word" is delimited by any type of whitespace. Multiple words can be matched by using operator modifiers.
+
+It supports the following grammar:
+- `|` OR operator, used between words. (This word OR this word must be present in any order)
+- `+` AND operator, used between words. (This word AND this word must be present in any order)
+- `*` wildcard (0 to n). When evaluating, `*` gets converted into a lazy match wildcard in regex: `.*?`.
+- `?` wildcard (0 to 1). When evaluating, `?` gets converted into a regex `.?`.
 - `()` grouping
-- words must be alphanumeric; case insensitive, no whitespaces
-
-A rough translation of requery grammar into regex:
-
-- `|` or -> as is
-- `a+b` and -> `(a) (b)`
-- `*` wildcard (0 to n) -> `.*?`
-- `?` wildcard (0 to 1) -> `.?`
-- `()` grouping -> as is, but empty groups are invalid (because they match everything in regex)
-- generic word -> `(?=.*?\bfoobar\b)`
+- words must be alphanumeric; no whitespaces. Can be modified by wildcards.
+ 
+## Implementation
+It uses the shunting yard algorithm to parse a Requery expression into tokens. 
+These tokens are arranged in reverse polish notation, and are then evaluated into a boolean result when compared against a text block.
