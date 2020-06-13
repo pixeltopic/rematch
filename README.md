@@ -16,3 +16,6 @@ It supports the following grammar:
 ## Implementation
 It uses the shunting yard algorithm to parse a Requery expression into tokens. 
 These tokens are arranged in reverse polish notation, and are then evaluated into a boolean result when compared against a text block.
+
+Requery is only partially dependent on Go's Regexp package for matching wildcarded words.
+It does not transpile an expression from Requery into Regex as Go's Regex flavor does not support lookaheads and non-order dependent word matching.
