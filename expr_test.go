@@ -1,6 +1,7 @@
 package requery
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -213,7 +214,7 @@ func TestExprToRPN(t *testing.T) {
 				switch q {
 				case nil:
 				default:
-					if actualOut := q.Join(","); actualOut != entry.out {
+					if actualOut := strings.Join(q, ","); actualOut != entry.out {
 						t.Errorf("test #%d should have out=%s, but out=%s", i+1, entry.out, actualOut)
 					} else {
 						for j, evalEntry := range entry.evalRPN {

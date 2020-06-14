@@ -14,10 +14,12 @@ func allowedWordChars(c rune) bool {
 		('0' <= c && c <= '9')
 }
 
-func tokenizeExpr(expr string) (*utils.Queue, error) {
-	tokenQueue := utils.NewQueue()
-
+// tokenizeExpr converts the expression into a string slice of tokens.
+// performs validation on a "word" type token to ensure it does not contain non-alphanumeric characters
+// or only consists of wildcards
+func tokenizeExpr(expr string) ([]string, error) {
 	var (
+		tokens []string
 		token  strings.Builder
 		adjAst bool
 	)
@@ -33,7 +35,7 @@ func tokenizeExpr(expr string) (*utils.Queue, error) {
 				if strings.Contains(tokStr, string(OPWILDCARDAST)) || strings.Contains(tokStr, string(OPWILDCARDQUEST)) {
 					tokStr = tokStr + "/r"
 				}
-				tokenQueue.Enqueue(tokStr)
+				tokens = append(tokens, tokStr)
 				token.Reset()
 			}
 		}
@@ -52,7 +54,7 @@ func tokenizeExpr(expr string) (*utils.Queue, error) {
 			if err := flushWordTok(); err != nil {
 				return nil, err
 			}
-			tokenQueue.Enqueue(string(char))
+			tokens = append(tokens, string(char))
 			adjAst = false
 		case OPWILDCARDAST:
 			if !adjAst {
@@ -74,30 +76,32 @@ func tokenizeExpr(expr string) (*utils.Queue, error) {
 		return nil, err
 	}
 
-	return tokenQueue, nil
+	return tokens, nil
 }
 
-// shuntingYard produces a queue ordered in reverse polish notation; will err if unbalanced parenthesis or invalid syntax
-func shuntingYard(tokens *utils.Queue) (*utils.Queue, error) {
-	rpnQueue := utils.NewQueue()
-	opStack := utils.NewStack()
-
+// shuntingYard is an implementation of the Shunting-yard algorithm.
+// Produces a string slice ordered in Reverse Polish notation;
+// will err if unbalanced parenthesis or invalid expression syntax
+func shuntingYard(tokens []string) ([]string, error) {
 	const (
 		expectOperator = 0
 		expectOperand  = 1
 	)
 
-	var state int // false = expectOperator, true = expectOperand state
+	var (
+		rpnTokens []string
+		opStack   = utils.NewStack()
+		state     = expectOperand
+	)
 
-	state = expectOperand
-
+	// helper which ignores the ok result in stack
 	stackPeek := func() string {
 		e, _ := opStack.Peek()
 		return e
 	}
 
-	for tokens.Len() > 0 {
-		switch tok, _ := tokens.Dequeue(); tok {
+	for _, tok := range tokens {
+		switch tok {
 		case string(OPAND):
 			// AND and OR infix operators have EQUAL precendence, meaning the expression will be evaluated from left to right during absence of groups.
 			// ambiguity can be reduced by using parens
@@ -113,7 +117,7 @@ func shuntingYard(tokens *utils.Queue) (*utils.Queue, error) {
 			}
 			for opStack.Len() > 0 && stackPeek() != string(OPGROUPL) {
 				op, _ := opStack.Pop()
-				_ = rpnQueue.Enqueue(op)
+				rpnTokens = append(rpnTokens, op)
 			}
 			_ = opStack.Push(tok)
 			state = expectOperand
@@ -139,7 +143,7 @@ func shuntingYard(tokens *utils.Queue) (*utils.Queue, error) {
 					break
 				}
 				op, _ = opStack.Pop()
-				_ = rpnQueue.Enqueue(op)
+				rpnTokens = append(rpnTokens, op)
 			}
 			// If the stack runs out without finding a left parenthesis, then there are mismatched parentheses.
 			if !lParenWasFound {
@@ -161,9 +165,8 @@ func shuntingYard(tokens *utils.Queue) (*utils.Queue, error) {
 				return nil, errors.New("unexpected operand, want operator")
 			}
 			// the token is not an operator; but a word.
-			// this needs validation (make sure wildcards and allowed chars are valid)
 			// append /r to end of tok if regex
-			rpnQueue.Enqueue(tok)
+			rpnTokens = append(rpnTokens, tok)
 			state = expectOperator
 		}
 	}
@@ -178,27 +181,27 @@ func shuntingYard(tokens *utils.Queue) (*utils.Queue, error) {
 		if ele == string(OPGROUPL) || ele == string(OPGROUPR) {
 			return nil, errors.New("mismatched parenthesis at end of expression")
 		}
-		_ = rpnQueue.Enqueue(ele)
+		rpnTokens = append(rpnTokens, ele)
 	}
 
-	return rpnQueue, nil
+	return rpnTokens, nil
 }
 
-// ExprToRPN converts an expression into reverse polish notation.
-func ExprToRPN(expr string) (*utils.Queue, error) {
-	q, err := tokenizeExpr(expr)
+// ExprToRPN converts an expression into Reverse Polish notation.
+func ExprToRPN(expr string) ([]string, error) {
+	toks, err := tokenizeExpr(expr)
 	if err != nil {
 		return nil, err
 	}
 
-	return shuntingYard(q)
+	return shuntingYard(toks)
 }
 
-func evalRPN(rpnQueue *utils.Queue, text string) (output bool, err error) {
+// evalRPN evaluates a slice of string tokens in Reverse Polish notation into a boolean result.
+func evalRPN(rpnTokens []string, text string) (output bool, err error) {
 	argStack := utils.NewStack()
-	queueItems := rpnQueue.Items()
 
-	for _, tok := range queueItems {
+	for _, tok := range rpnTokens {
 		switch tok {
 		case string(OPAND):
 			if argStack.Len() < 2 {
@@ -266,6 +269,7 @@ func replaceIfRegex(tok string) (parsed string, regex bool) {
 }
 
 // TODO: optimize tokenization by performing less duplicate splits
+// TODO: write tests involving wildcard matching
 func simpleMatch(word string, isRegex bool, text string) (bool, error) {
 	textTokens := strings.Fields(text)
 	if !isRegex {
