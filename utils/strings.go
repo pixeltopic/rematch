@@ -58,6 +58,16 @@ func (q *Queue) Peek() (s string, ok bool) {
 	return
 }
 
+// Items returns the Queue as a string slice
+func (q *Queue) Items() []string {
+	var copied []string
+	copied = append(copied, q.queue...)
+	if copied == nil {
+		return []string{}
+	}
+	return copied
+}
+
 // Stack is a string stack implementation.
 type Stack struct {
 	stack []string

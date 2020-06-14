@@ -2,7 +2,7 @@ package requery
 
 import (
 	"errors"
-	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/pixeltopic/requery/utils"
@@ -194,32 +194,92 @@ func ExprToRPN(expr string) (*utils.Queue, error) {
 	return shuntingYard(q)
 }
 
-func parseRPN(rpnQueue *utils.Queue, textTokens []string) bool {
+func evalRPN(rpnQueue *utils.Queue, text string) (output bool, err error) {
 	argStack := utils.NewStack()
-	var curResult bool
+	queueItems := rpnQueue.Items()
 
-	for rpnQueue.Len() > 0 {
-		switch tok, _ := rpnQueue.Peek(); tok {
+	for _, tok := range queueItems {
+		switch tok {
 		case string(OPAND):
-			fallthrough
+			if argStack.Len() < 2 {
+				return false, errors.New("not enough arguments in stack") // parse error
+			}
+			operandA, _ := argStack.Pop()
+			operandB, _ := argStack.Pop()
+
+			if operandA == "true" && operandB == "true" {
+				argStack.Push("true")
+			} else {
+				argStack.Push("false")
+			}
 		case string(OPOR):
 			if argStack.Len() < 2 {
-				return false // parse error
+				return false, errors.New("not enough arguments in stack") // parse error
 			}
-			lhs, _ := argStack.Pop()
-			rhs, _ := argStack.Pop()
+			operandA, _ := argStack.Pop()
+			operandB, _ := argStack.Pop()
 
-			// AND:
-			// check if lhs and rhs are both present in text tokens (if not $Y or $N); if yes, generate a special "$Y" token and push into stack
-			// if lhs and rhs contain $N, $Y in one or both pops, determine which one "wins". in this case, if it is not ($Y, $Y) or ($Y, present), or (present, $Y),
-			// it will eval to $N before pushing back onto the stack and looking for the next arg
-			fmt.Println(lhs, rhs) // temp
-
+			if operandA == "true" || operandB == "true" {
+				argStack.Push("true")
+			} else {
+				argStack.Push("false")
+			}
 		default:
-			_, _ = rpnQueue.Dequeue()
-			_ = argStack.Push(tok)
+			tok, isRegex := replaceIfRegex(tok)
+			res, err := simpleMatch(tok, isRegex, text)
+			if err != nil {
+				return false, err
+			}
+			//fmt.Printf("@@@ debug, %s is %v\n", tok, res)
+			if res {
+				_ = argStack.Push("true")
+			} else {
+				_ = argStack.Push("false")
+			}
+
 		}
 
 	}
-	return curResult
+
+	for argStack.Len() == 1 {
+		res, _ := argStack.Pop()
+		if res == "true" {
+			return true, nil
+		}
+	}
+	if argStack.Len() > 1 {
+		return false, errors.New("invalid element count in stack at end of evaluation")
+	}
+	return false, nil
+
+}
+
+func replaceIfRegex(tok string) (parsed string, regex bool) {
+	if parsed = strings.TrimSuffix(tok, "/r"); parsed != tok {
+
+		tok = strings.ReplaceAll(tok, string(OPWILDCARDQUEST), ".?")
+		tok = strings.ReplaceAll(tok, string(OPWILDCARDAST), ".*?")
+
+		return parsed, true
+	}
+	return tok, false
+}
+
+// TODO: optimize tokenization by performing less duplicate splits
+func simpleMatch(word string, isRegex bool, text string) (bool, error) {
+	textTokens := strings.Fields(text)
+	if !isRegex {
+		for i := range textTokens {
+			if textTokens[i] == word {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+	matched, err := regexp.MatchString(word, text)
+	if err != nil {
+		return false, err
+	}
+	return matched, nil
+
 }
