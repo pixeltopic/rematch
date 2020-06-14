@@ -8,6 +8,12 @@ import (
 	"github.com/pixeltopic/requery/utils"
 )
 
+func allowedWordChars(c rune) bool {
+	return ('a' <= c && c <= 'z') ||
+		('A' <= c && c <= 'Z') ||
+		('0' <= c && c <= '9')
+}
+
 func tokenizeExpr(expr string) (*utils.Queue, error) {
 	tokenQueue := utils.NewQueue()
 
@@ -71,8 +77,8 @@ func tokenizeExpr(expr string) (*utils.Queue, error) {
 	return tokenQueue, nil
 }
 
-// shunt2 produces a queue ordered in reverse polish notation; will err if unbalanced parenthesis
-func shunt2(tokens *utils.Queue) (*utils.Queue, error) {
+// shuntingYard produces a queue ordered in reverse polish notation; will err if unbalanced parenthesis or invalid syntax
+func shuntingYard(tokens *utils.Queue) (*utils.Queue, error) {
 	rpnQueue := utils.NewQueue()
 	opStack := utils.NewStack()
 
@@ -185,7 +191,7 @@ func ExprToRPN(expr string) (*utils.Queue, error) {
 		return nil, err
 	}
 
-	return shunt2(q)
+	return shuntingYard(q)
 }
 
 func parseRPN(rpnQueue *utils.Queue, textTokens []string) bool {
