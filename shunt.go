@@ -2,6 +2,7 @@ package requery
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -90,15 +91,9 @@ func shuntingYard(tokens []string) ([]string, error) {
 
 	var (
 		rpnTokens []string
-		opStack   = stack.New()
+		opStack   = stack.New() // stack of strings; stores operators only
 		state     = expectOperand
 	)
-
-	// helper which ignores the ok result in stack
-	stackPeek := func() string {
-		e := opStack.Peek()
-		return e.(string)
-	}
 
 	for _, tok := range tokens {
 		switch tok {
@@ -115,9 +110,8 @@ func shuntingYard(tokens []string) ([]string, error) {
 			if state != expectOperator {
 				return nil, errors.New("unexpected infix operator, want operand")
 			}
-			for opStack.Len() > 0 && stackPeek() != string(OPGROUPL) {
-				op := opStack.Pop().(string)
-				rpnTokens = append(rpnTokens, op)
+			for opStack.Len() > 0 && opStack.Peek() != string(OPGROUPL) {
+				rpnTokens = append(rpnTokens, opStack.Pop().(string))
 			}
 			opStack.Push(tok)
 			state = expectOperand
@@ -125,7 +119,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 			if state != expectOperand {
 				return nil, errors.New("unexpected left parenthesis")
 			}
-			opStack.Push(string(OPGROUPL))
+			opStack.Push(tok)
 			state = expectOperand
 		case string(OPGROUPR):
 			if state != expectOperator {
@@ -137,13 +131,11 @@ func shuntingYard(tokens []string) ([]string, error) {
 			// while the operator at the top of the operator stack is not a left parenthesis:
 			//   pop the operator from the operator stack onto the output queue.
 			for opStack.Len() > 0 {
-				op := stackPeek()
-				if op == string(OPGROUPL) {
+				if opStack.Peek() == string(OPGROUPL) {
 					lParenWasFound = true
 					break
 				}
-				op = opStack.Pop().(string)
-				rpnTokens = append(rpnTokens, op)
+				rpnTokens = append(rpnTokens, opStack.Pop().(string))
 			}
 			// If the stack runs out without finding a left parenthesis, then there are mismatched parentheses.
 			if !lParenWasFound {
@@ -153,8 +145,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 			// if there is a left parenthesis at the top of the operator stack, then:
 			//   pop the operator from the operator stack and discard it
 			if opStack.Len() > 0 {
-				op := stackPeek()
-				if op == string(OPGROUPL) {
+				if opStack.Peek() == string(OPGROUPL) {
 					opStack.Pop()
 				}
 			}
@@ -199,33 +190,23 @@ func ExprToRPN(expr string) ([]string, error) {
 
 // evalRPN evaluates a slice of string tokens in Reverse Polish notation into a boolean result.
 func evalRPN(rpnTokens []string, text string) (output bool, err error) {
-	argStack := stack.New()
+	argStack := stack.New() // stack of bools
 
 	for _, tok := range rpnTokens {
 		switch tok {
 		case string(OPAND):
-			if argStack.Len() < 2 {
-				return false, errors.New("not enough arguments in stack") // parse error
-			}
-			operandA := argStack.Pop()
-			operandB := argStack.Pop()
-
-			if operandA == "true" && operandB == "true" {
-				argStack.Push("true")
-			} else {
-				argStack.Push("false")
-			}
+			fallthrough
 		case string(OPOR):
 			if argStack.Len() < 2 {
-				return false, errors.New("not enough arguments in stack") // parse error
+				return false, errors.New("not enough arguments in stack; likely syntax error in RPN")
 			}
-			operandA := argStack.Pop()
-			operandB := argStack.Pop()
+			a, b := argStack.Pop().(bool), argStack.Pop().(bool)
 
-			if operandA == "true" || operandB == "true" {
-				argStack.Push("true")
-			} else {
-				argStack.Push("false")
+			switch tok {
+			case string(OPAND):
+				argStack.Push(a && b)
+			default:
+				argStack.Push(a || b)
 			}
 		default:
 			tok, isRegex := replaceIfRegex(tok)
@@ -233,27 +214,19 @@ func evalRPN(rpnTokens []string, text string) (output bool, err error) {
 			if err != nil {
 				return false, err
 			}
-			//fmt.Printf("@@@ debug, %s is %v\n", tok, res)
-			if res {
-				argStack.Push("true")
-			} else {
-				argStack.Push("false")
-			}
+
+			argStack.Push(res)
 
 		}
 
 	}
 
-	if argStack.Len() == 1 {
-		if argStack.Pop() == "true" {
-			return true, nil
-		}
+	switch l := argStack.Len(); l {
+	case 1:
+		return argStack.Pop().(bool), nil
+	default:
+		return false, fmt.Errorf("invalid element count in stack at end of evaluation; got %d", l)
 	}
-	if argStack.Len() > 1 {
-		return false, errors.New("invalid element count in stack at end of evaluation")
-	}
-	return false, nil
-
 }
 
 func replaceIfRegex(tok string) (parsed string, regex bool) {
