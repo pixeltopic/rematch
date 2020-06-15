@@ -2,10 +2,17 @@
 
 Requery is a basic, stripped down query language that matches against strings.
 
-A Requery expression is composed of alphanumeric, case sensitive "words" to be matched against another set of words.
-A "word" is delimited by any type of whitespace. Multiple words can be matched by using operator modifiers.
+A Requery expression is composed of alphanumeric, case sensitive words & patterns to be matched against an arbitrary string. This matching occurs in linear time.
 
-It supports the following grammar:
+A "word" is delimited by any type of whitespace, and behaves as a Regex word boundary would.
+- Word order is disregarded unlike most Regex flavors.
+- When word matching, only alphanumeric tokens are compared with one another. Before matching occurs, any invalid characters present in the string will be replaced with whitespaces before being split with whitespace delimiters.
+
+A "pattern" is simply a string with wildcard operators present.
+- Unlike a word, it is matched against the _entire_ string rather than word tokens.
+- This can allow matching more complex patterns such as URLs or words that may have punctuation or other non-alphanumeric characters present.
+
+Requery supports the following grammar:
 - `|` OR operator, used between words. (This word OR this word must be present in any order)
 - `+` AND operator, used between words. (This word AND this word must be present in any order)
 - `*` wildcard (0 to n). When evaluating, `*` gets converted into a lazy match wildcard in regex: `.*?`.
@@ -14,8 +21,8 @@ It supports the following grammar:
 - words must be alphanumeric; no whitespaces. Can be modified by wildcards.
  
 ## Implementation
-It uses the shunting yard algorithm to parse a Requery expression into tokens. 
-These tokens are arranged in reverse polish notation, and are then evaluated into a boolean result when compared against a text block.
+Requery uses the Shunting-yard algorithm to parse a Requery expression into tokens. 
+These tokens are arranged in Reverse Polish notation, and are then evaluated into a boolean result when compared against an arbitrary string.
 
 Requery is only partially dependent on Go's Regexp package for matching wildcarded words.
 It does not transpile an expression from Requery into Regex as Go's Regex flavor does not support lookaheads and non-order dependent word matching.
