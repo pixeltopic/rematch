@@ -9,6 +9,16 @@ import (
 	"github.com/pixeltopic/requery/internal/stack"
 )
 
+// expression operators
+const (
+	OPAND           = '+'
+	OPOR            = '|'
+	OPGROUPL        = '('
+	OPGROUPR        = ')'
+	OPWILDCARDAST   = '*'
+	OPWILDCARDQUEST = '?'
+)
+
 func allowedWordChars(c rune) bool {
 	return ('a' <= c && c <= 'z') ||
 		('A' <= c && c <= 'Z') ||
@@ -179,6 +189,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 }
 
 // ExprToRPN converts an expression into Reverse Polish notation.
+// TODO: this might be package private and be converted to be exposed via Requery type receiver
 func ExprToRPN(expr string) ([]string, error) {
 	toks, err := tokenizeExpr(expr)
 	if err != nil {
