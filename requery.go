@@ -63,20 +63,11 @@ func EvalExpr(expr *Expr, s string) (bool, error) {
 // Eval matches an expression against text
 // TODO: add tests
 func Eval(expr *Expr, text *Text) (bool, error) {
-
 	if !expr.compiled {
-		toks, err := tokenizeExpr(expr.raw)
+		err := expr.Compile()
 		if err != nil {
 			return false, err
 		}
-
-		rpn, err := shuntingYard(toks)
-		if err != nil {
-			return false, err
-		}
-
-		expr.rpn = rpn
-		expr.compiled = true
 	}
 
 	return evalRPN(expr.rpn, text)

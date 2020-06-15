@@ -33,3 +33,24 @@ func (e *Expr) Rpn() string {
 func (e *Expr) Compiled() bool {
 	return e.compiled
 }
+
+// Compile an expression.
+// A compiled expression will not be recompiled.
+func (e *Expr) Compile() error {
+	if e.compiled {
+		return nil
+	}
+	toks, err := tokenizeExpr(e.raw)
+	if err != nil {
+		return err
+	}
+	rpn, err := shuntingYard(toks)
+	if err != nil {
+		return err
+	}
+
+	e.rpn = rpn
+	e.compiled = true
+
+	return nil
+}
