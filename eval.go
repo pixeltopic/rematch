@@ -251,15 +251,13 @@ func replaceIfRegex(tok string) (parsed string, regex bool) {
 	return tok, false
 }
 
-// TODO: write tests involving wildcard matching
-func containsWordOrPattern(word string, isRegex bool, text *Text) (bool, error) {
+// TODO: write tests involving wildcard matching. Possibly return a slice of matching strings
+// containsWordOrPattern matches a word or pattern against the provided text.
+// If it is not regex, will check against a set of unique words extracted from the raw text.
+// If it is, will check against the raw text (which may contain non-alphanumeric characters).
+func containsWordOrPattern(s string, isRegex bool, text *Text) (bool, error) {
 	if !isRegex {
-		return text.uniqueToks.Contains(word), nil
+		return text.uniqueToks.Contains(s), nil
 	}
-	matched, err := regexp.MatchString(word, text.raw)
-	if err != nil {
-		return false, err
-	}
-	return matched, nil
-
+	return regexp.MatchString(s, text.raw)
 }
