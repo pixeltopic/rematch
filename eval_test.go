@@ -218,7 +218,7 @@ func TestExprToRPN(t *testing.T) {
 						t.Errorf("test #%d should have out=%s, but out=%s", i+1, entry.out, actualOut)
 					} else {
 						for j, evalEntry := range entry.evalRPN {
-							res, err := evalRPN(q, evalEntry.text)
+							res, err := evalRPN(q, NewText(evalEntry.text))
 							if err != nil {
 								t.Errorf("test #%d:%d should have err=nil, but err=%s", i+1, j+1, err.Error())
 							} else if res != evalEntry.shouldMatch {

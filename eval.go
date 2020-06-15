@@ -200,7 +200,7 @@ func ExprToRPN(expr string) ([]string, error) {
 }
 
 // evalRPN evaluates a slice of string tokens in Reverse Polish notation into a boolean result.
-func evalRPN(rpnTokens []string, text string) (output bool, err error) {
+func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
 	argStack := stack.New() // stack of bools
 
 	for _, tok := range rpnTokens {
@@ -221,7 +221,7 @@ func evalRPN(rpnTokens []string, text string) (output bool, err error) {
 			}
 		default:
 			tok, isRegex := replaceIfRegex(tok)
-			res, err := simpleMatch(tok, isRegex, text)
+			res, err := containsWordOrPattern(tok, isRegex, text)
 			if err != nil {
 				return false, err
 			}
@@ -251,19 +251,12 @@ func replaceIfRegex(tok string) (parsed string, regex bool) {
 	return tok, false
 }
 
-// TODO: optimize tokenization by performing less duplicate splits
 // TODO: write tests involving wildcard matching
-func simpleMatch(word string, isRegex bool, text string) (bool, error) {
-	textTokens := strings.Fields(text)
+func containsWordOrPattern(word string, isRegex bool, text *Text) (bool, error) {
 	if !isRegex {
-		for i := range textTokens {
-			if textTokens[i] == word {
-				return true, nil
-			}
-		}
-		return false, nil
+		return text.uniqueToks.Contains(word), nil
 	}
-	matched, err := regexp.MatchString(word, text)
+	matched, err := regexp.MatchString(word, text.raw)
 	if err != nil {
 		return false, err
 	}
