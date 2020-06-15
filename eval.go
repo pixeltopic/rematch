@@ -17,6 +17,7 @@ const (
 	OPGROUPR        = ')'
 	OPWILDCARDAST   = '*'
 	OPWILDCARDQUEST = '?'
+	REGEX           = "/r"
 )
 
 func allowedWordChars(c rune) bool {
@@ -44,7 +45,7 @@ func tokenizeExpr(expr string) ([]string, error) {
 				return errors.New("invalid word; cannot be lone question wildcard")
 			default:
 				if strings.Contains(tokStr, string(OPWILDCARDAST)) || strings.Contains(tokStr, string(OPWILDCARDQUEST)) {
-					tokStr = tokStr + "/r"
+					tokStr = tokStr + REGEX
 				}
 				tokens = append(tokens, tokStr)
 				token.Reset()
@@ -188,17 +189,6 @@ func shuntingYard(tokens []string) ([]string, error) {
 	return rpnTokens, nil
 }
 
-// ExprToRPN converts an expression into Reverse Polish notation.
-// TODO: this might be package private and be converted to be exposed via Requery type receiver
-func ExprToRPN(expr string) ([]string, error) {
-	toks, err := tokenizeExpr(expr)
-	if err != nil {
-		return nil, err
-	}
-
-	return shuntingYard(toks)
-}
-
 // evalRPN evaluates a slice of string tokens in Reverse Polish notation into a boolean result.
 func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
 	argStack := stack.New() // stack of bools
@@ -240,11 +230,11 @@ func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
 	}
 }
 
-func replaceIfRegex(tok string) (parsed string, regex bool) {
-	if parsed = strings.TrimSuffix(tok, "/r"); parsed != tok {
+func replaceIfRegex(tok string) (parsed string, isRegex bool) {
+	if parsed := strings.TrimSuffix(tok, REGEX); parsed != tok {
 
-		tok = strings.ReplaceAll(tok, string(OPWILDCARDQUEST), ".?")
-		tok = strings.ReplaceAll(tok, string(OPWILDCARDAST), ".*?")
+		parsed = strings.ReplaceAll(parsed, string(OPWILDCARDQUEST), ".?")
+		parsed = strings.ReplaceAll(parsed, string(OPWILDCARDAST), ".*?")
 
 		return parsed, true
 	}

@@ -3,6 +3,7 @@ package requery
 import "strings"
 
 // Expr is an expression written in requery.
+// TODO: add marshalling support
 type Expr struct {
 	raw      string   // raw expression
 	rpn      []string // expression in RPN form

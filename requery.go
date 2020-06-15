@@ -50,17 +50,19 @@ func NewText(s string) *Text {
 	}
 }
 
-// Requery allows matching expressions with text
-type Requery struct{}
-
-// EvalString matches an expression against a string.
-func (r Requery) EvalString(expr *Expr, s string) (bool, error) {
-	txt := NewText(s)
-	return r.Eval(expr, txt)
+// EvalRawExpr matches a raw expression against a string
+func EvalRawExpr(expr, s string) (bool, error) {
+	return EvalExpr(NewExpr(expr), s)
 }
 
-// Eval evaluates an expression against a text block.
-func (Requery) Eval(expr *Expr, text *Text) (bool, error) {
+// EvalExpr matches an expression against a string.
+func EvalExpr(expr *Expr, s string) (bool, error) {
+	return Eval(expr, NewText(s))
+}
+
+// Eval matches an expression against text
+// TODO: add tests
+func Eval(expr *Expr, text *Text) (bool, error) {
 
 	if !expr.compiled {
 		toks, err := tokenizeExpr(expr.raw)

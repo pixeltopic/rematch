@@ -10,6 +10,16 @@ type testEvalEntry struct {
 	shouldMatch bool
 }
 
+// testExprToRPN converts an expression into Reverse Polish notation.
+func testExprToRPN(expr string) ([]string, error) {
+	toks, err := tokenizeExpr(expr)
+	if err != nil {
+		return nil, err
+	}
+
+	return shuntingYard(toks)
+}
+
 func TestExprToRPN(t *testing.T) {
 	t.Run("expression conversion to reverse polish notation tests", func(t *testing.T) {
 		entries := []struct {
@@ -20,12 +30,20 @@ func TestExprToRPN(t *testing.T) {
 			evalRPN    []testEvalEntry
 		}{
 			{
-				in:  "kkekw|(foobar)",
-				out: "kkekw,foobar,|",
+				in:  "barfoo|(foobar)",
+				out: "barfoo,foobar,|",
 				evalRPN: []testEvalEntry{
 					{
 						text:        "this is a basic example of some text foobar",
 						shouldMatch: true,
+					},
+					{
+						text:        "this is a barfoo basic example of some text foo bar",
+						shouldMatch: true,
+					},
+					{
+						text:        "this is a bar foo basic example of some text foo bar",
+						shouldMatch: false,
 					},
 					{
 						text:        "this is a basic example foo of some text bar",
@@ -78,6 +96,28 @@ func TestExprToRPN(t *testing.T) {
 				},
 			},
 			{
+				in:  "hi|hi|hi+hi+hi|hi+*hi",
+				out: "hi,hi,|,hi,|,hi,+,hi,+,hi,|,*hi/r,+",
+				evalRPN: []testEvalEntry{
+					{
+						text:        "hi",
+						shouldMatch: true,
+					},
+					{
+						text:        "hhi",
+						shouldMatch: false,
+					},
+					{
+						text:        "hi hi hi",
+						shouldMatch: true,
+					},
+					{
+						text:        "ih",
+						shouldMatch: false,
+					},
+				},
+			},
+			{
 				in:  "hi?the***re",
 				out: "hi?the*re/r",
 			},
@@ -86,8 +126,8 @@ func TestExprToRPN(t *testing.T) {
 				out: "hi?the*re/r",
 			},
 			{
-				in:  "((hi?the***re+*kekw?))",
-				out: "hi?the*re/r,*kekw?/r,+",
+				in:  "((hi?the***re+*howdy?))",
+				out: "hi?the*re/r,*howdy?/r,+",
 			},
 			{
 				in:  "(hi0+hi1|hi2+hi3)",
@@ -102,8 +142,8 @@ func TestExprToRPN(t *testing.T) {
 				out: "hi?the*re/r,*a?/r,+",
 			},
 			{
-				in:  "(hi)|((guys+hows+it+goin))",
-				out: "hi,guys,hows,+,it,+,goin,+,|",
+				in:  "(hi)|((guys+hows+it+going))",
+				out: "hi,guys,hows,+,it,+,going,+,|",
 			},
 			{
 				in:         "((hi?the***re))+",
@@ -111,7 +151,7 @@ func TestExprToRPN(t *testing.T) {
 				errStr:     "unexpected operator at end of expression, want operand",
 			},
 			{
-				in:         "k+|+kekw+",
+				in:         "k+|+kk+",
 				shouldFail: true,
 				errStr:     "unexpected infix operator, want operand",
 			},
@@ -132,7 +172,7 @@ func TestExprToRPN(t *testing.T) {
 				errStr:     "invalid word; cannot be lone question wildcard",
 			},
 			{
-				in:         "kekw)(())",
+				in:         "foo)(())",
 				shouldFail: true,
 				errStr:     "mismatched parenthesis",
 			},
@@ -195,7 +235,7 @@ func TestExprToRPN(t *testing.T) {
 
 		for i, entry := range entries {
 			t.Run("test shunting", func(t *testing.T) {
-				q, err := ExprToRPN(entry.in)
+				q, err := testExprToRPN(entry.in)
 				switch err {
 				case nil:
 					if entry.shouldFail {
