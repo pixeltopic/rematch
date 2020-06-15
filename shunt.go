@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pixeltopic/requery/utils"
+	"github.com/pixeltopic/requery/internal/stack"
 )
 
 func allowedWordChars(c rune) bool {
@@ -90,14 +90,14 @@ func shuntingYard(tokens []string) ([]string, error) {
 
 	var (
 		rpnTokens []string
-		opStack   = utils.NewStack()
+		opStack   = stack.New()
 		state     = expectOperand
 	)
 
 	// helper which ignores the ok result in stack
 	stackPeek := func() string {
-		e, _ := opStack.Peek()
-		return e
+		e := opStack.Peek()
+		return e.(string)
 	}
 
 	for _, tok := range tokens {
@@ -116,16 +116,16 @@ func shuntingYard(tokens []string) ([]string, error) {
 				return nil, errors.New("unexpected infix operator, want operand")
 			}
 			for opStack.Len() > 0 && stackPeek() != string(OPGROUPL) {
-				op, _ := opStack.Pop()
+				op := opStack.Pop().(string)
 				rpnTokens = append(rpnTokens, op)
 			}
-			_ = opStack.Push(tok)
+			opStack.Push(tok)
 			state = expectOperand
 		case string(OPGROUPL):
 			if state != expectOperand {
 				return nil, errors.New("unexpected left parenthesis")
 			}
-			_ = opStack.Push(string(OPGROUPL))
+			opStack.Push(string(OPGROUPL))
 			state = expectOperand
 		case string(OPGROUPR):
 			if state != expectOperator {
@@ -142,7 +142,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 					lParenWasFound = true
 					break
 				}
-				op, _ = opStack.Pop()
+				op = opStack.Pop().(string)
 				rpnTokens = append(rpnTokens, op)
 			}
 			// If the stack runs out without finding a left parenthesis, then there are mismatched parentheses.
@@ -155,7 +155,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 			if opStack.Len() > 0 {
 				op := stackPeek()
 				if op == string(OPGROUPL) {
-					_, _ = opStack.Pop()
+					opStack.Pop()
 				}
 			}
 
@@ -177,11 +177,11 @@ func shuntingYard(tokens []string) ([]string, error) {
 
 	/* After while loop, if operator stack not null, pop everything to output queue */
 	for opStack.Len() > 0 {
-		ele, _ := opStack.Pop()
+		ele := opStack.Pop()
 		if ele == string(OPGROUPL) || ele == string(OPGROUPR) {
 			return nil, errors.New("mismatched parenthesis at end of expression")
 		}
-		rpnTokens = append(rpnTokens, ele)
+		rpnTokens = append(rpnTokens, ele.(string))
 	}
 
 	return rpnTokens, nil
@@ -199,7 +199,7 @@ func ExprToRPN(expr string) ([]string, error) {
 
 // evalRPN evaluates a slice of string tokens in Reverse Polish notation into a boolean result.
 func evalRPN(rpnTokens []string, text string) (output bool, err error) {
-	argStack := utils.NewStack()
+	argStack := stack.New()
 
 	for _, tok := range rpnTokens {
 		switch tok {
@@ -207,8 +207,8 @@ func evalRPN(rpnTokens []string, text string) (output bool, err error) {
 			if argStack.Len() < 2 {
 				return false, errors.New("not enough arguments in stack") // parse error
 			}
-			operandA, _ := argStack.Pop()
-			operandB, _ := argStack.Pop()
+			operandA := argStack.Pop()
+			operandB := argStack.Pop()
 
 			if operandA == "true" && operandB == "true" {
 				argStack.Push("true")
@@ -219,8 +219,8 @@ func evalRPN(rpnTokens []string, text string) (output bool, err error) {
 			if argStack.Len() < 2 {
 				return false, errors.New("not enough arguments in stack") // parse error
 			}
-			operandA, _ := argStack.Pop()
-			operandB, _ := argStack.Pop()
+			operandA := argStack.Pop()
+			operandB := argStack.Pop()
 
 			if operandA == "true" || operandB == "true" {
 				argStack.Push("true")
@@ -235,18 +235,17 @@ func evalRPN(rpnTokens []string, text string) (output bool, err error) {
 			}
 			//fmt.Printf("@@@ debug, %s is %v\n", tok, res)
 			if res {
-				_ = argStack.Push("true")
+				argStack.Push("true")
 			} else {
-				_ = argStack.Push("false")
+				argStack.Push("false")
 			}
 
 		}
 
 	}
 
-	for argStack.Len() == 1 {
-		res, _ := argStack.Pop()
-		if res == "true" {
+	if argStack.Len() == 1 {
+		if argStack.Pop() == "true" {
 			return true, nil
 		}
 	}
