@@ -1,9 +1,11 @@
 package requery
 
-import "strings"
+import (
+	"encoding/json"
+	"strings"
+)
 
 // Expr is an expression written in requery.
-// TODO: add marshalling support
 type Expr struct {
 	raw      string   // raw expression
 	rpn      []string // expression in RPN form
@@ -51,6 +53,44 @@ func (e *Expr) Compile() error {
 
 	e.rpn = rpn
 	e.compiled = true
+
+	return nil
+}
+
+type auxExpr struct {
+	Raw      string   `json:"raw"`
+	Rpn      []string `json:"rpn"`
+	Compiled bool     `json:"compiled"`
+}
+
+// MarshalJSON implements JSON marshalling
+func (e *Expr) MarshalJSON() ([]byte, error) {
+
+	var rpn []string
+	if e.rpn == nil {
+		rpn = []string{}
+	} else {
+		rpn = e.rpn
+	}
+
+	return json.Marshal(&auxExpr{
+		Raw:      e.raw,
+		Rpn:      rpn,
+		Compiled: e.compiled,
+	})
+}
+
+// UnmarshalJSON implements JSON unmarshalling
+func (e *Expr) UnmarshalJSON(data []byte) error {
+	aux := &auxExpr{}
+	err := json.Unmarshal(data, aux)
+	if err != nil {
+		return err
+	}
+
+	e.raw = aux.Raw
+	e.rpn = aux.Rpn
+	e.compiled = aux.Compiled
 
 	return nil
 }

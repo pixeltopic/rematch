@@ -30,6 +30,20 @@ func TestExprToRPN(t *testing.T) {
 			evalRPN    []testEvalEntry
 		}{
 			{
+				in:  "Foo",
+				out: "Foo",
+				evalRPN: []testEvalEntry{
+					{
+						text:        "this is a basic example of some text Foo bar",
+						shouldMatch: true,
+					},
+					{
+						text:        "this is a basic example of some text foo bar",
+						shouldMatch: false,
+					},
+				},
+			},
+			{
 				in:  "barfoo|(foobar)",
 				out: "barfoo,foobar,|",
 				evalRPN: []testEvalEntry{
@@ -146,6 +160,11 @@ func TestExprToRPN(t *testing.T) {
 				out: "hi,guys,hows,+,it,+,going,+,|",
 			},
 			{
+				in:         "",
+				shouldFail: true,
+				errStr:     "unexpected operator at end of expression, want operand",
+			},
+			{
 				in:         "((hi?the***re))+",
 				shouldFail: true,
 				errStr:     "unexpected operator at end of expression, want operand",
@@ -234,8 +253,8 @@ func TestExprToRPN(t *testing.T) {
 		}
 
 		for i, entry := range entries {
-			t.Run("test shunting", func(t *testing.T) {
-				q, err := testExprToRPN(entry.in)
+			t.Run("test evaluation with raw expressions", func(t *testing.T) {
+				rpn, err := testExprToRPN(entry.in)
 				switch err {
 				case nil:
 					if entry.shouldFail {
@@ -251,14 +270,19 @@ func TestExprToRPN(t *testing.T) {
 					}
 				}
 
-				switch q {
+				if entry.shouldFail {
+					return
+				}
+
+				switch rpn {
 				case nil:
+					t.Errorf("test #%d should have out=%s, but out=nil", i+1, entry.out)
 				default:
-					if actualOut := strings.Join(q, ","); actualOut != entry.out {
+					if actualOut := strings.Join(rpn, ","); actualOut != entry.out {
 						t.Errorf("test #%d should have out=%s, but out=%s", i+1, entry.out, actualOut)
 					} else {
 						for j, evalEntry := range entry.evalRPN {
-							res, err := evalRPN(q, NewText(evalEntry.text))
+							res, err := evalRPN(rpn, NewText(evalEntry.text))
 							if err != nil {
 								t.Errorf("test #%d:%d should have err=nil, but err=%s", i+1, j+1, err.Error())
 							} else if res != evalEntry.shouldMatch {
