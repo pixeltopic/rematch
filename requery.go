@@ -61,7 +61,6 @@ func EvalExpr(expr *Expr, s string) (bool, error) {
 }
 
 // Eval matches an expression against text
-// TODO: add tests
 func Eval(expr *Expr, text *Text) (bool, error) {
 	if !expr.compiled {
 		err := expr.Compile()
