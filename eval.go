@@ -144,6 +144,10 @@ func shuntingYard(tokens []string) ([]string, error) {
 			for opStack.Len() > 0 {
 				if opStack.Peek() == string(OPGROUPL) {
 					lParenWasFound = true
+
+					// if there is a left parenthesis at the top of the operator stack, then:
+					//   pop the operator from the operator stack and discard it
+					opStack.Pop()
 					break
 				}
 				rpnTokens = append(rpnTokens, opStack.Pop().(string))
@@ -151,14 +155,6 @@ func shuntingYard(tokens []string) ([]string, error) {
 			// If the stack runs out without finding a left parenthesis, then there are mismatched parentheses.
 			if !lParenWasFound {
 				return nil, errors.New("mismatched parenthesis")
-			}
-
-			// if there is a left parenthesis at the top of the operator stack, then:
-			//   pop the operator from the operator stack and discard it
-			if opStack.Len() > 0 {
-				if opStack.Peek() == string(OPGROUPL) {
-					opStack.Pop()
-				}
 			}
 
 			state = expectOperator
