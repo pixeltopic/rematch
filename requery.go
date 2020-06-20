@@ -62,11 +62,9 @@ func EvalExpr(expr *Expr, s string) (bool, error) {
 
 // Eval matches an expression against text
 func Eval(expr *Expr, text *Text) (bool, error) {
-	if !expr.compiled {
-		err := expr.Compile()
-		if err != nil {
-			return false, err
-		}
+	err := expr.Compile()
+	if err != nil {
+		return false, err
 	}
 
 	return evalRPN(expr.rpn, text)
