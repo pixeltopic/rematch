@@ -2,10 +2,22 @@ package requery
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/pixeltopic/requery/utils"
+	"github.com/pixeltopic/requery/internal/stack"
+)
+
+// expression operators
+const (
+	OPAND           = '+'
+	OPOR            = '|'
+	OPGROUPL        = '('
+	OPGROUPR        = ')'
+	OPWILDCARDAST   = '*'
+	OPWILDCARDQUEST = '?'
+	REGEX           = "/r"
 )
 
 func allowedWordChars(c rune) bool {
@@ -33,7 +45,7 @@ func tokenizeExpr(expr string) ([]string, error) {
 				return errors.New("invalid word; cannot be lone question wildcard")
 			default:
 				if strings.Contains(tokStr, string(OPWILDCARDAST)) || strings.Contains(tokStr, string(OPWILDCARDQUEST)) {
-					tokStr = tokStr + "/r"
+					tokStr = tokStr + REGEX
 				}
 				tokens = append(tokens, tokStr)
 				token.Reset()
@@ -90,15 +102,9 @@ func shuntingYard(tokens []string) ([]string, error) {
 
 	var (
 		rpnTokens []string
-		opStack   = utils.NewStack()
+		opStack   = stack.New() // stack of strings; stores operators only
 		state     = expectOperand
 	)
-
-	// helper which ignores the ok result in stack
-	stackPeek := func() string {
-		e, _ := opStack.Peek()
-		return e
-	}
 
 	for _, tok := range tokens {
 		switch tok {
@@ -115,17 +121,16 @@ func shuntingYard(tokens []string) ([]string, error) {
 			if state != expectOperator {
 				return nil, errors.New("unexpected infix operator, want operand")
 			}
-			for opStack.Len() > 0 && stackPeek() != string(OPGROUPL) {
-				op, _ := opStack.Pop()
-				rpnTokens = append(rpnTokens, op)
+			for opStack.Len() > 0 && opStack.Peek() != string(OPGROUPL) {
+				rpnTokens = append(rpnTokens, opStack.Pop().(string))
 			}
-			_ = opStack.Push(tok)
+			opStack.Push(tok)
 			state = expectOperand
 		case string(OPGROUPL):
 			if state != expectOperand {
 				return nil, errors.New("unexpected left parenthesis")
 			}
-			_ = opStack.Push(string(OPGROUPL))
+			opStack.Push(tok)
 			state = expectOperand
 		case string(OPGROUPR):
 			if state != expectOperator {
@@ -137,13 +142,11 @@ func shuntingYard(tokens []string) ([]string, error) {
 			// while the operator at the top of the operator stack is not a left parenthesis:
 			//   pop the operator from the operator stack onto the output queue.
 			for opStack.Len() > 0 {
-				op := stackPeek()
-				if op == string(OPGROUPL) {
+				if opStack.Peek() == string(OPGROUPL) {
 					lParenWasFound = true
 					break
 				}
-				op, _ = opStack.Pop()
-				rpnTokens = append(rpnTokens, op)
+				rpnTokens = append(rpnTokens, opStack.Pop().(string))
 			}
 			// If the stack runs out without finding a left parenthesis, then there are mismatched parentheses.
 			if !lParenWasFound {
@@ -153,9 +156,8 @@ func shuntingYard(tokens []string) ([]string, error) {
 			// if there is a left parenthesis at the top of the operator stack, then:
 			//   pop the operator from the operator stack and discard it
 			if opStack.Len() > 0 {
-				op := stackPeek()
-				if op == string(OPGROUPL) {
-					_, _ = opStack.Pop()
+				if opStack.Peek() == string(OPGROUPL) {
+					opStack.Pop()
 				}
 			}
 
@@ -177,113 +179,75 @@ func shuntingYard(tokens []string) ([]string, error) {
 
 	/* After while loop, if operator stack not null, pop everything to output queue */
 	for opStack.Len() > 0 {
-		ele, _ := opStack.Pop()
+		ele := opStack.Pop()
 		if ele == string(OPGROUPL) || ele == string(OPGROUPR) {
 			return nil, errors.New("mismatched parenthesis at end of expression")
 		}
-		rpnTokens = append(rpnTokens, ele)
+		rpnTokens = append(rpnTokens, ele.(string))
 	}
 
 	return rpnTokens, nil
 }
 
-// ExprToRPN converts an expression into Reverse Polish notation.
-func ExprToRPN(expr string) ([]string, error) {
-	toks, err := tokenizeExpr(expr)
-	if err != nil {
-		return nil, err
-	}
-
-	return shuntingYard(toks)
-}
-
 // evalRPN evaluates a slice of string tokens in Reverse Polish notation into a boolean result.
-func evalRPN(rpnTokens []string, text string) (output bool, err error) {
-	argStack := utils.NewStack()
+func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
+	argStack := stack.New() // stack of bools
 
 	for _, tok := range rpnTokens {
 		switch tok {
 		case string(OPAND):
-			if argStack.Len() < 2 {
-				return false, errors.New("not enough arguments in stack") // parse error
-			}
-			operandA, _ := argStack.Pop()
-			operandB, _ := argStack.Pop()
-
-			if operandA == "true" && operandB == "true" {
-				argStack.Push("true")
-			} else {
-				argStack.Push("false")
-			}
+			fallthrough
 		case string(OPOR):
 			if argStack.Len() < 2 {
-				return false, errors.New("not enough arguments in stack") // parse error
+				return false, errors.New("not enough arguments in stack; likely syntax error in RPN")
 			}
-			operandA, _ := argStack.Pop()
-			operandB, _ := argStack.Pop()
+			a, b := argStack.Pop().(bool), argStack.Pop().(bool)
 
-			if operandA == "true" || operandB == "true" {
-				argStack.Push("true")
-			} else {
-				argStack.Push("false")
+			switch tok {
+			case string(OPAND):
+				argStack.Push(a && b)
+			default:
+				argStack.Push(a || b)
 			}
 		default:
 			tok, isRegex := replaceIfRegex(tok)
-			res, err := simpleMatch(tok, isRegex, text)
+			res, err := containsWordOrPattern(tok, isRegex, text)
 			if err != nil {
 				return false, err
 			}
-			//fmt.Printf("@@@ debug, %s is %v\n", tok, res)
-			if res {
-				_ = argStack.Push("true")
-			} else {
-				_ = argStack.Push("false")
-			}
+
+			argStack.Push(res)
 
 		}
 
 	}
 
-	for argStack.Len() == 1 {
-		res, _ := argStack.Pop()
-		if res == "true" {
-			return true, nil
-		}
+	switch l := argStack.Len(); l {
+	case 1:
+		return argStack.Pop().(bool), nil
+	default:
+		return false, fmt.Errorf("invalid element count in stack at end of evaluation; got %d", l)
 	}
-	if argStack.Len() > 1 {
-		return false, errors.New("invalid element count in stack at end of evaluation")
-	}
-	return false, nil
-
 }
 
-func replaceIfRegex(tok string) (parsed string, regex bool) {
-	if parsed = strings.TrimSuffix(tok, "/r"); parsed != tok {
+func replaceIfRegex(tok string) (parsed string, isRegex bool) {
+	if parsed := strings.TrimSuffix(tok, REGEX); parsed != tok {
 
-		tok = strings.ReplaceAll(tok, string(OPWILDCARDQUEST), ".?")
-		tok = strings.ReplaceAll(tok, string(OPWILDCARDAST), ".*?")
+		parsed = strings.ReplaceAll(parsed, string(OPWILDCARDQUEST), ".?")
+		parsed = strings.ReplaceAll(parsed, string(OPWILDCARDAST), ".*?")
 
 		return parsed, true
 	}
 	return tok, false
 }
 
-// TODO: optimize tokenization by performing less duplicate splits
-// TODO: write tests involving wildcard matching
-func simpleMatch(word string, isRegex bool, text string) (bool, error) {
-	textTokens := strings.Fields(text)
+// TODO: write tests involving wildcard matching. Possibly return a slice of matching strings
+// containsWordOrPattern matches a word or pattern against the provided text.
+// If it is not regex, will check against a set of unique words extracted from the raw text.
+// If it is, will check against the raw text (which may contain non-alphanumeric characters).
+func containsWordOrPattern(s string, isRegex bool, text *Text) (bool, error) {
 	if !isRegex {
-		for i := range textTokens {
-			if textTokens[i] == word {
-				return true, nil
-			}
-		}
-		return false, nil
+		return text.uniqueToks.Contains(s), nil
 	}
-	matched, err := regexp.MatchString(word, text)
-	if err != nil {
-		return false, err
-	}
-	return matched, nil
-
+	return regexp.MatchString(s, text.raw)
 }
