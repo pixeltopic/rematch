@@ -17,7 +17,9 @@ const (
 	OPGROUPR        = ')'
 	OPWILDCARDAST   = '*'
 	OPWILDCARDQUEST = '?'
-	REGEX           = "/r"
+	OPNEGATE        = '!'
+
+	REGEX = "/r"
 )
 
 func allowedWordChars(c rune) bool {
@@ -59,6 +61,8 @@ func tokenizeExpr(expr string) ([]string, error) {
 		case OPGROUPL:
 			fallthrough
 		case OPGROUPR:
+			fallthrough
+		case OPNEGATE:
 			fallthrough
 		case OPAND:
 			fallthrough
@@ -123,6 +127,12 @@ func shuntingYard(tokens []string) ([]string, error) {
 			}
 			for opStack.Len() > 0 && opStack.Peek() != string(OPGROUPL) {
 				rpnTokens = append(rpnTokens, opStack.Pop().(string))
+			}
+			opStack.Push(tok)
+			state = expectOperand
+		case string(OPNEGATE):
+			if state != expectOperand {
+				return nil, errors.New("unexpected negation")
 			}
 			opStack.Push(tok)
 			state = expectOperand
@@ -191,11 +201,16 @@ func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
 
 	for _, tok := range rpnTokens {
 		switch tok {
+		case string(OPNEGATE):
+			if argStack.Len() < 1 {
+				return false, errors.New("less than 1 argument in stack; likely syntax error in RPN")
+			}
+			argStack.Push(!argStack.Pop().(bool))
 		case string(OPAND):
 			fallthrough
 		case string(OPOR):
 			if argStack.Len() < 2 {
-				return false, errors.New("not enough arguments in stack; likely syntax error in RPN")
+				return false, errors.New("less than 2 arguments in stack; likely syntax error in RPN")
 			}
 			a, b := argStack.Pop().(bool), argStack.Pop().(bool)
 

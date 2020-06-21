@@ -66,6 +66,28 @@ func TestExprToRPN(t *testing.T) {
 				},
 			},
 			{
+				in:  "!!barfoo|(foobar)",
+				out: "barfoo,!,!,foobar,|",
+				evalRPN: []testEvalEntry{
+					{
+						text:        "this is a basic example of some text foobar",
+						shouldMatch: true,
+					},
+					{
+						text:        "this is a barfoo basic example of some text foo bar",
+						shouldMatch: true,
+					},
+					{
+						text:        "this is a bar foo basic example of some text foo bar",
+						shouldMatch: false,
+					},
+					{
+						text:        "this is a basic example foo of some text bar",
+						shouldMatch: false,
+					},
+				},
+			},
+			{
 				in:  "dog|mio+FBK",
 				out: "dog,mio,|,FBK,+",
 				evalRPN: []testEvalEntry{
@@ -105,6 +127,59 @@ func TestExprToRPN(t *testing.T) {
 					},
 					{
 						text:        "cat lel mio",
+						shouldMatch: true,
+					},
+				},
+			},
+			// Testing negation
+			{
+				in:  "((!mio+!cat)|dog)",
+				out: "mio,!,cat,!,+,dog,|",
+				evalRPN: []testEvalEntry{
+					{
+						text:        "fox", // NOT mio and NOT cat evaluates to true when matching this.
+						shouldMatch: true,
+					},
+					{
+						text:        "mio cat",
+						shouldMatch: false,
+					},
+					{
+						text:        "dog mio cat",
+						shouldMatch: true,
+					},
+					{
+						text:        "dog",
+						shouldMatch: true,
+					},
+					{
+						text:        "cat dog",
+						shouldMatch: true,
+					},
+				},
+			},
+			{
+				in:  "(!(mio+cat)|dog)", // output for this test should equal above test where negation is applied to all operands within group
+				out: "mio,cat,+,!,dog,|",
+				evalRPN: []testEvalEntry{
+					{
+						text:        "fox", // NOT mio and NOT cat evaluates to true when matching this.
+						shouldMatch: true,
+					},
+					{
+						text:        "mio cat",
+						shouldMatch: false,
+					},
+					{
+						text:        "dog mio cat",
+						shouldMatch: true,
+					},
+					{
+						text:        "dog",
+						shouldMatch: true,
+					},
+					{
+						text:        "cat dog",
 						shouldMatch: true,
 					},
 				},
