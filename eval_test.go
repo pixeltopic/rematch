@@ -38,61 +38,36 @@ func testExprToRPN(expr string) ([]string, error) {
 	return shuntingYard(toks)
 }
 
+// this test suite tests expression conversion to reverse polish notation and evaluation of rpn form against test inputs
 func TestExprToRPN(t *testing.T) {
-	t.Run("expression conversion to reverse polish notation tests", func(t *testing.T) {
+	// simple tests with parens but no regex functionality or negations
+	t.Run("basic valid expressions", func(t *testing.T) {
 		entries := []testEntry{
 			{
 				in:  "Foo",
 				out: "Foo",
 				evalRPN: []testEvalEntry{
-					{
-						text:        "this is a basic example of some text Foo bar",
-						shouldMatch: true,
-					},
-					{
-						text:        "this is a basic example of some text foo bar",
-						shouldMatch: false,
-					},
+					{text: "this is a basic example of some text Foo bar", shouldMatch: true},
+					{text: "this is a basic example of some text foo bar", shouldMatch: false},
 				},
 			},
 			{
 				in:  "barfoo|(foobar)",
 				out: "barfoo,foobar,|",
 				evalRPN: []testEvalEntry{
-					{
-						text:        "this is a basic example of some text foobar",
-						shouldMatch: true,
-					},
-					{
-						text:        "this is a barfoo basic example of some text foo bar",
-						shouldMatch: true,
-					},
-					{
-						text:        "this is a bar foo basic example of some text foo bar",
-						shouldMatch: false,
-					},
-					{
-						text:        "this is a basic example foo of some text bar",
-						shouldMatch: false,
-					},
+					{text: "this is a basic example of some text foobar", shouldMatch: true},
+					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true},
+					{text: "this is a bar foo basic example of some text foo bar", shouldMatch: false},
+					{text: "this is a basic example foo of some text bar", shouldMatch: false},
 				},
 			},
 			{
 				in:  "dog|mio+FBK",
 				out: "dog,mio,|,FBK,+",
 				evalRPN: []testEvalEntry{
-					{
-						text:        "mio FBK collab when",
-						shouldMatch: true,
-					},
-					{
-						text:        "mio FBK collab when and dog",
-						shouldMatch: true,
-					},
-					{
-						text:        "dog mio some other stuff mio",
-						shouldMatch: false,
-					},
+					{text: "mio FBK collab when", shouldMatch: true},
+					{text: "mio FBK collab when and dog", shouldMatch: true},
+					{text: "dog mio some other stuff mio", shouldMatch: false},
 				},
 			},
 			{
@@ -106,7 +81,25 @@ func TestExprToRPN(t *testing.T) {
 					{text: "cat lel mio", shouldMatch: true},
 				},
 			},
-			// Testing negation (with parenthesis and more)
+			{
+				in:  "(hi0+hi1|hi2+hi3)",
+				out: "hi0,hi1,+,hi2,|,hi3,+",
+			},
+			{
+				in:  "(hi)|((guys+hows+it+going))",
+				out: "hi,guys,hows,+,it,+,going,+,|",
+			},
+		}
+
+		for i, entry := range entries {
+			t.Run("should all pass", func(t *testing.T) {
+				testHelper(t, i, entry)
+			})
+		}
+	})
+
+	t.Run("valid expressions with negations", func(t *testing.T) {
+		entries := []testEntry{
 			{
 				in:  "!foo",
 				out: "foo,!",
@@ -135,22 +128,10 @@ func TestExprToRPN(t *testing.T) {
 				in:  "!!barfoo|(foobar)",
 				out: "barfoo,!,!,foobar,|",
 				evalRPN: []testEvalEntry{
-					{
-						text:        "this is a basic example of some text foobar",
-						shouldMatch: true,
-					},
-					{
-						text:        "this is a barfoo basic example of some text foo bar",
-						shouldMatch: true,
-					},
-					{
-						text:        "this is a bar foo basic example of some text foo bar",
-						shouldMatch: false,
-					},
-					{
-						text:        "this is a basic example foo of some text bar",
-						shouldMatch: false,
-					},
+					{text: "this is a basic example of some text foobar", shouldMatch: true},
+					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true},
+					{text: "this is a bar foo basic example of some text foo bar", shouldMatch: false},
+					{text: "this is a basic example foo of some text bar", shouldMatch: false},
 				},
 			},
 			{
@@ -168,28 +149,23 @@ func TestExprToRPN(t *testing.T) {
 				in:  "(!(mio+cat)|dog)", // output for this test should equal above test where negation is applied to all operands within group
 				out: "mio,cat,+,!,dog,|",
 				evalRPN: []testEvalEntry{
-					{
-						text:        "fox", // NOT mio and NOT cat evaluates to true when matching this.
-						shouldMatch: true,
-					},
-					{
-						text:        "mio cat",
-						shouldMatch: false,
-					},
-					{
-						text:        "dog mio cat",
-						shouldMatch: true,
-					},
-					{
-						text:        "dog",
-						shouldMatch: true,
-					},
-					{
-						text:        "cat dog",
-						shouldMatch: true,
-					},
+					{text: "fox", shouldMatch: true}, // NOT mio and NOT cat evaluates to true when matching this.
+					{text: "mio cat", shouldMatch: false},
+					{text: "dog mio cat", shouldMatch: true},
+					{text: "dog", shouldMatch: true},
+					{text: "cat dog", shouldMatch: true},
 				},
 			},
+		}
+		for i, entry := range entries {
+			t.Run("should all pass", func(t *testing.T) {
+				testHelper(t, i, entry)
+			})
+		}
+	})
+
+	t.Run("valid regex expressions with negations", func(t *testing.T) {
+		entries := []testEntry{
 			{
 				in:  "hi|hi|hi+hi+hi|hi+*hi",
 				out: "hi,hi,|,hi,|,hi,+,hi,+,hi,|,*hi/r,+",
@@ -213,10 +189,6 @@ func TestExprToRPN(t *testing.T) {
 				out: "hi?the*re/r,*howdy?/r,+",
 			},
 			{
-				in:  "(hi0+hi1|hi2+hi3)",
-				out: "hi0,hi1,+,hi2,|,hi3,+",
-			},
-			{
 				in:  "((dog+(hotate|TETAHO))|(g*D+(Xpotato|yubiyubi)))",
 				out: "dog,hotate,TETAHO,|,+,g*D/r,Xpotato,yubiyubi,|,+,|",
 			},
@@ -224,14 +196,9 @@ func TestExprToRPN(t *testing.T) {
 				in:  "((hi?the***re+*a?))",
 				out: "hi?the*re/r,*a?/r,+",
 			},
-			{
-				in:  "(hi)|((guys+hows+it+going))",
-				out: "hi,guys,hows,+,it,+,going,+,|",
-			},
 		}
-
 		for i, entry := range entries {
-			t.Run("test evaluation with raw expressions", func(t *testing.T) {
+			t.Run("should all pass", func(t *testing.T) {
 				testHelper(t, i, entry)
 			})
 		}
