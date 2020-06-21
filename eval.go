@@ -1,7 +1,6 @@
 package requery
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -18,9 +17,24 @@ const (
 	OPWILDCARDAST   = '*'
 	OPWILDCARDQUEST = '?'
 	OPNEGATE        = '!'
+	OPWHITESPACE    = '_'
 
 	REGEX = "/r"
 )
+
+// SyntaxError occurs when an expression is malformed.
+type SyntaxError string
+
+func (e SyntaxError) Error() string {
+	return fmt.Sprintf("SyntaxError:%s", string(e))
+}
+
+// EvalError occurs when an expression fails to evaluate because it is in improper RPN
+type EvalError string
+
+func (e EvalError) Error() string {
+	return string(e)
+}
 
 func allowedWordChars(c rune) bool {
 	return ('a' <= c && c <= 'z') ||
@@ -42,9 +56,9 @@ func tokenizeExpr(expr string) ([]string, error) {
 		if token.Len() != 0 {
 			switch tokStr := token.String(); tokStr {
 			case string(OPWILDCARDAST):
-				return errors.New("invalid word; cannot be lone asterisk wildcard")
+				return SyntaxError("invalid word; cannot be lone asterisk wildcard")
 			case string(OPWILDCARDQUEST):
-				return errors.New("invalid word; cannot be lone question wildcard")
+				return SyntaxError("invalid word; cannot be lone question wildcard")
 			default:
 				if strings.Contains(tokStr, string(OPWILDCARDAST)) || strings.Contains(tokStr, string(OPWILDCARDQUEST)) {
 					tokStr = tokStr + REGEX
@@ -82,7 +96,7 @@ func tokenizeExpr(expr string) ([]string, error) {
 			adjAst = false
 		default:
 			if !allowedWordChars(char) {
-				return nil, errors.New("invalid char in word; must be alphanumeric")
+				return nil, SyntaxError("invalid char in word; must be alphanumeric")
 			}
 			token.WriteRune(char)
 			adjAst = false
@@ -123,7 +137,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 				push it onto the operator stack.
 			*/
 			if state != expectOperator {
-				return nil, errors.New("unexpected infix operator, want operand")
+				return nil, SyntaxError("unexpected infix operator, want operand")
 			}
 			for opStack.Len() > 0 && opStack.Peek() != string(OPGROUPL) {
 				rpnTokens = append(rpnTokens, opStack.Pop().(string))
@@ -132,19 +146,19 @@ func shuntingYard(tokens []string) ([]string, error) {
 			state = expectOperand
 		case string(OPNEGATE):
 			if state != expectOperand {
-				return nil, errors.New("unexpected negation")
+				return nil, SyntaxError("unexpected negation")
 			}
 			opStack.Push(tok)
 			state = expectOperand
 		case string(OPGROUPL):
 			if state != expectOperand {
-				return nil, errors.New("unexpected left parenthesis")
+				return nil, SyntaxError("unexpected left parenthesis")
 			}
 			opStack.Push(tok)
 			state = expectOperand
 		case string(OPGROUPR):
 			if state != expectOperator {
-				return nil, errors.New("unexpected right parenthesis")
+				return nil, SyntaxError("unexpected right parenthesis")
 			}
 
 			var lParenWasFound bool
@@ -164,13 +178,13 @@ func shuntingYard(tokens []string) ([]string, error) {
 			}
 			// If the stack runs out without finding a left parenthesis, then there are mismatched parentheses.
 			if !lParenWasFound {
-				return nil, errors.New("mismatched parenthesis")
+				return nil, SyntaxError("mismatched parenthesis")
 			}
 
 			state = expectOperator
 		default:
 			if state != expectOperand {
-				return nil, errors.New("unexpected operand, want operator")
+				return nil, SyntaxError("unexpected operand, want operator")
 			}
 			// the token is not an operator; but a word.
 			// append /r to end of tok if regex
@@ -180,14 +194,14 @@ func shuntingYard(tokens []string) ([]string, error) {
 	}
 
 	if state != expectOperator {
-		return nil, errors.New("unexpected operator at end of expression, want operand")
+		return nil, SyntaxError("unexpected operator at end of expression, want operand")
 	}
 
 	/* After while loop, if operator stack not null, pop everything to output queue */
 	for opStack.Len() > 0 {
 		ele := opStack.Pop()
 		if ele == string(OPGROUPL) || ele == string(OPGROUPR) {
-			return nil, errors.New("mismatched parenthesis at end of expression")
+			return nil, SyntaxError("mismatched parenthesis at end of expression")
 		}
 		rpnTokens = append(rpnTokens, ele.(string))
 	}
@@ -203,14 +217,14 @@ func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
 		switch tok {
 		case string(OPNEGATE):
 			if argStack.Len() < 1 {
-				return false, errors.New("less than 1 argument in stack; likely syntax error in RPN")
+				return false, EvalError("less than 1 argument in stack; likely syntax error in RPN")
 			}
 			argStack.Push(!argStack.Pop().(bool))
 		case string(OPAND):
 			fallthrough
 		case string(OPOR):
 			if argStack.Len() < 2 {
-				return false, errors.New("less than 2 arguments in stack; likely syntax error in RPN")
+				return false, EvalError("less than 2 arguments in stack; likely syntax error in RPN")
 			}
 			a, b := argStack.Pop().(bool), argStack.Pop().(bool)
 
@@ -237,7 +251,7 @@ func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
 	case 1:
 		return argStack.Pop().(bool), nil
 	default:
-		return false, fmt.Errorf("invalid element count in stack at end of evaluation; got %d", l)
+		return false, EvalError(fmt.Sprintf("invalid element count in stack at end of evaluation; got %d", l))
 	}
 }
 
