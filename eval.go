@@ -33,7 +33,7 @@ func (e SyntaxError) Error() string {
 type EvalError string
 
 func (e EvalError) Error() string {
-	return string(e)
+	return fmt.Sprintf("EvalError:%s", string(e))
 }
 
 func allowedWordChars(c rune) bool {
@@ -251,7 +251,7 @@ func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
 	case 1:
 		return argStack.Pop().(bool), nil
 	default:
-		return false, EvalError(fmt.Sprintf("invalid element count in stack at end of evaluation; got %d", l))
+		return false, EvalError("invalid element count in stack at end of evaluation")
 	}
 }
 

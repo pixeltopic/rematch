@@ -21,6 +21,11 @@ type testEntry struct {
 	evalRPN    []testEvalEntry
 }
 
+type testInvalidRPNEntry struct {
+	in  string // token in (invalid) RPN format, delimited by commas
+	err error
+}
+
 // testEvalEntry evaluates the (valid) out from testEntry against the given text
 type testEvalEntry struct {
 	text        string
@@ -92,7 +97,7 @@ func TestExprToRPN(t *testing.T) {
 
 		for i, entry := range entries {
 			t.Run("should all pass", func(t *testing.T) {
-				testHelper(t, i, entry)
+				testExprHelper(t, i, entry)
 			})
 		}
 	})
@@ -189,7 +194,7 @@ func TestExprToRPN(t *testing.T) {
 		}
 		for i, entry := range entries {
 			t.Run("should all pass", func(t *testing.T) {
-				testHelper(t, i, entry)
+				testExprHelper(t, i, entry)
 			})
 		}
 	})
@@ -218,8 +223,24 @@ func TestExprToRPN(t *testing.T) {
 				},
 			},
 			{
+				in:  "!((hi?the***re))",
+				out: "hi?the*re/r,!",
+				evalRPN: []testEvalEntry{
+					{text: "hi there", shouldMatch: false},
+					{text: "hithere", shouldMatch: false},
+					{text: "hithe /:-D/ re", shouldMatch: false},
+					{text: "hii there", shouldMatch: true},
+				},
+			},
+			{
 				in:  "((hi?the***re))",
 				out: "hi?the*re/r",
+				evalRPN: []testEvalEntry{
+					{text: "hi there", shouldMatch: true},
+					{text: "hithere", shouldMatch: true},
+					{text: "hithe /:-D/ re", shouldMatch: true},
+					{text: "hii there", shouldMatch: false},
+				},
 			},
 			{
 				in:  "((hi?the***re+*howdy?))",
@@ -236,7 +257,7 @@ func TestExprToRPN(t *testing.T) {
 		}
 		for i, entry := range entries {
 			t.Run("should all pass", func(t *testing.T) {
-				testHelper(t, i, entry)
+				testExprHelper(t, i, entry)
 			})
 		}
 	})
@@ -300,13 +321,45 @@ func TestExprToRPN(t *testing.T) {
 		for i, entry := range entries {
 			t.Run("should all fail", func(t *testing.T) {
 				entry.shouldFail = true
-				testHelper(t, i, entry)
+				testExprHelper(t, i, entry)
+			})
+		}
+	})
+
+	t.Run("invalid RPN expressions", func(t *testing.T) {
+		const (
+			unaryErr = EvalError("less than 1 argument in stack; likely syntax error in RPN")
+			infixErr = EvalError("less than 2 arguments in stack; likely syntax error in RPN")
+			resErr   = EvalError("invalid element count in stack at end of evaluation")
+		)
+
+		entries := []testInvalidRPNEntry{
+			{in: "hi,+", err: infixErr},
+			{in: "hi,there,+,|", err: infixErr},
+			{in: "!", err: unaryErr},
+			{in: "hi,there", err: resErr},
+			{in: "", err: nil}, // weird edge case where the string split results in [""] input for RPN and evaluates to false with nil err
+		}
+
+		for i, entry := range entries {
+			t.Run("should all fail", func(t *testing.T) {
+				testInvalidRPNHelper(t, i, entry)
 			})
 		}
 	})
 }
 
-func testHelper(t *testing.T, i int, entry testEntry) {
+// testInvalidRPNHelper exists to trigger RPN evaluation errors.
+func testInvalidRPNHelper(t *testing.T, i int, entry testInvalidRPNEntry) {
+	_, err := evalRPN(strings.Split(entry.in, ","), NewText(""))
+	if !errors.Is(entry.err, err) {
+		t.Errorf("test #%d should have err='%v', but err='%v'", i+1, entry.err, err)
+	}
+}
+
+// tests the entire core eval pipeline.
+// tokenizes, shunts, and evaluates RPN against test inputs
+func testExprHelper(t *testing.T, i int, entry testEntry) {
 	rpn, err := testExprToRPN(entry.in)
 
 	switch entry.shouldFail {
