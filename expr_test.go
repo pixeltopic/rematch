@@ -1,6 +1,7 @@
 package requery
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -21,8 +22,9 @@ func TestExpr(t *testing.T) {
 	t.Run("valid expression compiling into RPN and JSON encoding/decoding", func(t *testing.T) {
 		entries := []testExprEntry{
 			{
-				raw:         "barfoo|(foobar)",
-				expectedRPN: "barfoo,foobar,|",
+				raw:          "barfoo|(foobar)",
+				expectedRPN:  "barfoo,foobar,|",
+				expectedJSON: `{"raw":"barfoo|(foobar)","rpn":["barfoo","foobar","|"],"compiled":true}`,
 				evalRPN: []testEvalEntry{
 					{text: "this is a basic example of some text foobar", shouldMatch: true},
 					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true},
@@ -31,12 +33,13 @@ func TestExpr(t *testing.T) {
 				},
 			},
 			{
-				raw:         "((((chips))))|(fish***+(((tasty))))",
-				expectedRPN: "chips,fish*/r,tasty,+,|",
+				raw:          "((((ch?ips))))|(fish***+(((tasty))))",
+				expectedRPN:  "ch?ips/r,fish*/r,tasty,+,|",
+				expectedJSON: `{"raw":"((((ch?ips))))|(fish***+(((tasty))))","rpn":["ch?ips/r","fish*/r","tasty","+","|"],"compiled":true}`,
 				evalRPN: []testEvalEntry{
 					{text: "chips fish tasty", shouldMatch: true},
 					{text: "fish tasty", shouldMatch: true},
-					{text: "chips", shouldMatch: true},
+					{text: "chiips", shouldMatch: true},
 					{text: "fish", shouldMatch: false},
 				},
 			},
@@ -55,7 +58,7 @@ func TestExpr(t *testing.T) {
 		)
 
 		entries := []testExprEntry{
-			{raw: "(hi++hi1)", err: infixErr},
+			{raw: "(hi++hi1)", err: infixErr, expectedJSON: `{"raw":"(hi++hi1)","rpn":[],"compiled":false}`},
 		}
 
 		for i, entry := range entries {
@@ -83,6 +86,21 @@ func testExprHelper(t *testing.T, i int, entry testExprEntry) {
 		if !errors.Is(entry.err, err) {
 			t.Errorf("test #%d should have err=%v, but err=%v", i+1, entry.err, err)
 		}
+
+		// test JSON unmarshal/marshal anyways
+		var temp *Expr
+		if err := json.Unmarshal([]byte(entry.expectedJSON), &temp); err != nil {
+			t.Errorf("test #%d failed JSON unmarshal", i+1)
+			return
+		}
+		jsonBytes, err := json.Marshal(&temp)
+		if err != nil {
+			t.Errorf("test #%d failed JSON marshal", i+1)
+			return
+		}
+		if string(jsonBytes) != entry.expectedJSON {
+			t.Errorf("test #%d failed JSON comparison", i+1)
+		}
 		return
 	default:
 		if err != nil {
@@ -96,7 +114,20 @@ func testExprHelper(t *testing.T, i int, entry testExprEntry) {
 		return
 	}
 
-	// TODO: test JSON
+	// test JSON unmarshal/marshal
+	var temp *Expr
+	if err := json.Unmarshal([]byte(entry.expectedJSON), &temp); err != nil {
+		t.Errorf("test #%d failed JSON unmarshal", i+1)
+		return
+	}
+	jsonBytes, err := json.Marshal(&temp)
+	if err != nil {
+		t.Errorf("test #%d failed JSON marshal", i+1)
+		return
+	}
+	if string(jsonBytes) != entry.expectedJSON {
+		t.Errorf("test #%d failed JSON comparison", i+1)
+	}
 
 	if compiledRPN := strings.Join(expr.rpn, ","); compiledRPN != entry.expectedRPN {
 		t.Errorf("test #%d should have out=[%s], but out=[%s]", i+1, entry.expectedRPN, compiledRPN)
