@@ -17,7 +17,6 @@ type testEntry struct {
 	in         string
 	out        string // comma joined queue output
 	shouldFail bool
-	errStr     string
 	err        error
 	evalRPN    []testEvalEntry
 }
@@ -105,7 +104,8 @@ func TestExprToRPN(t *testing.T) {
 				out: "foo,!",
 				evalRPN: []testEvalEntry{
 					{text: "foo", shouldMatch: false},
-					{text: "bar", shouldMatch: true},
+					{text: "Foo", shouldMatch: true},
+					{text: "foo bar", shouldMatch: false},
 				},
 			},
 			{
@@ -122,6 +122,36 @@ func TestExprToRPN(t *testing.T) {
 				evalRPN: []testEvalEntry{
 					{text: "foo", shouldMatch: false},
 					{text: "bar", shouldMatch: true},
+				},
+			},
+			{
+				in:  "!foo+foo", // it is impossible for this expression to evaluate to true
+				out: "foo,!,foo,+",
+				evalRPN: []testEvalEntry{
+					{text: "", shouldMatch: false},
+					{text: "foo", shouldMatch: false},
+					{text: "bar", shouldMatch: false},
+					{text: "foo bar", shouldMatch: false},
+				},
+			},
+			{
+				in:  "!foo|foo", // it is impossible for this expression to evaluate to false
+				out: "foo,!,foo,|",
+				evalRPN: []testEvalEntry{
+					{text: "", shouldMatch: true},
+					{text: "foo", shouldMatch: true},
+					{text: "bar", shouldMatch: true},
+					{text: "foo bar", shouldMatch: true},
+				},
+			},
+			{
+				in:  "!(!((golang|Golang)+python))",
+				out: "golang,Golang,|,python,+,!,!",
+				evalRPN: []testEvalEntry{
+					{text: "python, go, golang!", shouldMatch: true},
+					{text: "GO! Go, Golang", shouldMatch: false},
+					{text: "Py, Golang, python", shouldMatch: true},
+					{text: "python", shouldMatch: false},
 				},
 			},
 			{
@@ -177,8 +207,15 @@ func TestExprToRPN(t *testing.T) {
 				},
 			},
 			{
-				in:  "hi?the***re",
-				out: "hi?the*re/r",
+				in:  "https???www?google?com***",
+				out: "https???www?google?com*/r",
+				evalRPN: []testEvalEntry{
+					{text: "https", shouldMatch: false},
+					{text: "here's a link: https://www.google.com", shouldMatch: true},
+					{text: "here's a link:https://www.google.com/", shouldMatch: true},
+					{text: "here's a link: ttps://www.google.com/", shouldMatch: false},
+					{text: "here's a link: httpswwwgooglecom/my/search/query", shouldMatch: true},
+				},
 			},
 			{
 				in:  "((hi?the***re))",
@@ -213,10 +250,12 @@ func TestExprToRPN(t *testing.T) {
 
 			// shunting errors
 			opErr     = SyntaxError("unexpected operator at end of expression, want operand")
+			opErr2    = SyntaxError("unexpected operand, want operator")
 			infixErr  = SyntaxError("unexpected infix operator, want operand")
 			parenErr  = SyntaxError("mismatched parenthesis")
 			parenErr2 = SyntaxError("mismatched parenthesis at end of expression")
 			rParenErr = SyntaxError("unexpected right parenthesis")
+			lParenErr = SyntaxError("unexpected left parenthesis")
 			negateErr = SyntaxError("unexpected negation")
 		)
 
@@ -239,6 +278,8 @@ func TestExprToRPN(t *testing.T) {
 			{in: "!FOO+!", err: opErr},
 
 			{in: "!hi!", err: negateErr},
+			{in: "!(hi!(again))", err: negateErr},
+			{in: "!(hi!again))", err: negateErr},
 
 			{in: "k+|+kk+", err: infixErr},
 			{in: "|", err: infixErr},
@@ -247,10 +288,13 @@ func TestExprToRPN(t *testing.T) {
 
 			{in: "hi+hi1)", err: parenErr},
 			{in: "foo)(())", err: parenErr},
+			{in: "(foo)(())", err: lParenErr},
 			{in: "(())", err: rParenErr}, // fails because an operand is expected immediately following a non-left paren
 			{in: "(()", err: rParenErr},  // same reason as above
 			{in: ")(())", err: rParenErr},
 			{in: "(hi", err: parenErr2},
+
+			{in: "(hi)there", err: opErr2},
 		}
 
 		for i, entry := range entries {
@@ -273,7 +317,7 @@ func testHelper(t *testing.T, i int, entry testEntry) {
 		return
 	default:
 		if err != nil {
-			t.Errorf("test #%d should have err='%s', but err=nil", i+1, entry.errStr)
+			t.Errorf("test #%d should have err='%v', but err=%v", i+1, entry.err, err)
 			return
 		}
 	}
