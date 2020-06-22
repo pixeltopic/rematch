@@ -43,7 +43,7 @@ func testExprToRPN(expr string) ([]string, error) {
 }
 
 // this test suite tests expression conversion to reverse polish notation and evaluation of rpn form against test inputs
-func TestExprToRPN(t *testing.T) {
+func TestEvalExprToRPN(t *testing.T) {
 	// simple tests with parens but no regex functionality or negations
 	t.Run("basic valid expressions", func(t *testing.T) {
 		entries := []testEntry{
@@ -97,7 +97,7 @@ func TestExprToRPN(t *testing.T) {
 
 		for i, entry := range entries {
 			t.Run("should all pass", func(t *testing.T) {
-				testExprHelper(t, i, entry)
+				testEvalHelper(t, i, entry)
 			})
 		}
 	})
@@ -194,7 +194,7 @@ func TestExprToRPN(t *testing.T) {
 		}
 		for i, entry := range entries {
 			t.Run("should all pass", func(t *testing.T) {
-				testExprHelper(t, i, entry)
+				testEvalHelper(t, i, entry)
 			})
 		}
 	})
@@ -257,7 +257,7 @@ func TestExprToRPN(t *testing.T) {
 		}
 		for i, entry := range entries {
 			t.Run("should all pass", func(t *testing.T) {
-				testExprHelper(t, i, entry)
+				testEvalHelper(t, i, entry)
 			})
 		}
 	})
@@ -321,7 +321,7 @@ func TestExprToRPN(t *testing.T) {
 		for i, entry := range entries {
 			t.Run("should all fail", func(t *testing.T) {
 				entry.shouldFail = true
-				testExprHelper(t, i, entry)
+				testEvalHelper(t, i, entry)
 			})
 		}
 	})
@@ -359,18 +359,18 @@ func testInvalidRPNHelper(t *testing.T, i int, entry testInvalidRPNEntry) {
 
 // tests the entire core eval pipeline.
 // tokenizes, shunts, and evaluates RPN against test inputs
-func testExprHelper(t *testing.T, i int, entry testEntry) {
+func testEvalHelper(t *testing.T, i int, entry testEntry) {
 	rpn, err := testExprToRPN(entry.in)
 
 	switch entry.shouldFail {
 	case true:
 		if !errors.Is(entry.err, err) {
-			t.Errorf("test #%d should have err='%v', but err='%v'", i+1, entry.err, err)
+			t.Errorf("test #%d should have err=%v, but err=%v", i+1, entry.err, err)
 		}
 		return
 	default:
 		if err != nil {
-			t.Errorf("test #%d should have err='%v', but err=%v", i+1, entry.err, err)
+			t.Errorf("test #%d should have err=%v, but err=%v", i+1, entry.err, err)
 			return
 		}
 	}
