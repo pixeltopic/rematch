@@ -17,7 +17,7 @@ func TestExpr(t *testing.T) {
 			{
 				raw:        "(hi++hi1)",
 				shouldFail: true,
-				errStr:     "unexpected infix operator, want operand",
+				errStr:     "SyntaxError:unexpected infix operator, want operand",
 			},
 			{
 				raw:         "barfoo|(foobar)",
