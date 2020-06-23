@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/pixeltopic/requery/internal/set"
+
 	"github.com/pixeltopic/requery/internal/stack"
 )
 
@@ -34,6 +36,11 @@ type EvalError string
 
 func (e EvalError) Error() string {
 	return fmt.Sprintf("EvalError:%s", string(e))
+}
+
+type result struct {
+	S  []string
+	OK bool
 }
 
 func allowedWordChars(c rune) bool {
@@ -109,6 +116,25 @@ func tokenizeExpr(expr string) ([]string, error) {
 	return tokens, nil
 }
 
+func updateNegatedSet(min, max int, rpnTokens []string, negated set.Set) set.Set {
+	for j := min; j < max; j++ {
+		//fmt.Printf("j:%d\n", j)
+		switch rpnTokens[j] {
+		case string(OPNEGATE):
+		case string(OPAND):
+		case string(OPOR):
+		case string(OPWHITESPACE):
+		default:
+			if negated.Contains(j) {
+				negated.Remove(j)
+			} else {
+				negated.Add(j)
+			}
+		}
+	}
+	return negated
+}
+
 // shuntingYard is an implementation of the Shunting-yard algorithm.
 // Produces a string slice ordered in Reverse Polish notation;
 // will err if unbalanced parenthesis or invalid expression syntax
@@ -119,9 +145,11 @@ func shuntingYard(tokens []string) ([]string, error) {
 	)
 
 	var (
-		rpnTokens []string
-		opStack   = stack.New() // stack of strings; stores operators only
-		state     = expectOperand
+		rpnTokens        []string
+		rpnTokensNegated = set.New() // contains the indices corresponding to rpnTokens that will be negated during eval phase. Only matters for returning matched pat/words
+		lookbacks        []int
+		opStack          = stack.New() // stack of strings; stores operators only
+		state            = expectOperand
 	)
 
 	for _, tok := range tokens {
@@ -140,7 +168,17 @@ func shuntingYard(tokens []string) ([]string, error) {
 				return nil, SyntaxError("unexpected infix operator, want operand")
 			}
 			for opStack.Len() > 0 && opStack.Peek() != string(OPGROUPL) {
-				rpnTokens = append(rpnTokens, opStack.Pop().(string))
+				op := opStack.Pop().(string)
+
+				if op == string(OPNEGATE) {
+					for _, l := range lookbacks {
+						//fmt.Println("or op:", len(rpnTokens))
+						rpnTokensNegated = updateNegatedSet(l, len(rpnTokens), rpnTokens, rpnTokensNegated)
+					}
+					lookbacks = []int{}
+				}
+
+				rpnTokens = append(rpnTokens, op)
 			}
 			opStack.Push(tok)
 			state = expectOperand
@@ -149,6 +187,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 				return nil, SyntaxError("unexpected negation")
 			}
 			opStack.Push(tok)
+			lookbacks = append(lookbacks, len(rpnTokens))
 			state = expectOperand
 		case string(OPGROUPL):
 			if state != expectOperand {
@@ -174,7 +213,17 @@ func shuntingYard(tokens []string) ([]string, error) {
 					opStack.Pop()
 					break
 				}
-				rpnTokens = append(rpnTokens, opStack.Pop().(string))
+				op := opStack.Pop().(string)
+
+				if op == string(OPNEGATE) {
+					for _, l := range lookbacks {
+						//fmt.Println("lparen:", len(rpnTokens))
+						rpnTokensNegated = updateNegatedSet(l, len(rpnTokens), rpnTokens, rpnTokensNegated)
+					}
+					lookbacks = []int{}
+				}
+
+				rpnTokens = append(rpnTokens, op)
 			}
 			// If the stack runs out without finding a left parenthesis, then there are mismatched parentheses.
 			if !lParenWasFound {
@@ -199,19 +248,33 @@ func shuntingYard(tokens []string) ([]string, error) {
 
 	/* After while loop, if operator stack not null, pop everything to output queue */
 	for opStack.Len() > 0 {
-		ele := opStack.Pop()
-		if ele == string(OPGROUPL) || ele == string(OPGROUPR) {
+		op := opStack.Pop().(string)
+		switch op {
+		case string(OPGROUPL):
+			fallthrough
+		case string(OPGROUPR):
 			return nil, SyntaxError("mismatched parenthesis at end of expression")
+		case string(OPNEGATE):
+			//fmt.Println("entered")
+			for _, l := range lookbacks {
+				//fmt.Println("looped")
+				rpnTokensNegated = updateNegatedSet(l, len(rpnTokens), rpnTokens, rpnTokensNegated)
+			}
+			lookbacks = []int{}
 		}
-		rpnTokens = append(rpnTokens, ele.(string))
+
+		rpnTokens = append(rpnTokens, op)
 	}
+
+	//fmt.Println(rpnTokensNegated.String())
 
 	return rpnTokens, nil
 }
 
 // evalRPN evaluates a slice of string tokens in Reverse Polish notation into a boolean result.
 func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
-	argStack := stack.New() // stack of bools
+	argStack := stack.New()            // stack of bools
+	queryResult := map[string]result{} // mapping of word or pattern keys to results.
 
 	for _, tok := range rpnTokens {
 		switch tok {
@@ -235,11 +298,22 @@ func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
 				argStack.Push(a || b)
 			}
 		default:
-			tok, isRegex := replaceIfRegex(tok)
+			wordOrPat, isRegex := replaceIfRegex(tok)
+			matches, strs := containsWordOrPattern(wordOrPat, isRegex, text)
+			queryResult[tok] = result{
+				S:  strs,
+				OK: matches,
+			}
 
-			argStack.Push(containsWordOrPattern(tok, isRegex, text))
+			argStack.Push(matches)
 		}
 	}
+
+	// TODO: compare this queryResult with the negated index set and negate all equal keys from queryResult.
+	// account for edge case where the negated index set has multiple different indices that map to the SAME key!
+	// somehow going to need to pass a 3rd shunt argument to this. might make things sorta complicated. how can i elegantly handle token metadata?
+	// eventually this should return a []string instead of a bool, but api should allow bool or []string returning. (bool can just be len([]string) > 0)
+	//fmt.Println(queryResult)
 
 	switch l := argStack.Len(); l {
 	case 1:
@@ -264,11 +338,15 @@ func replaceIfRegex(tok string) (parsed string, isRegex bool) {
 // containsWordOrPattern matches a word or pattern against the provided text.
 // If it is not regex, will check against a set of unique words extracted from the raw text.
 // If it is, will check against the raw text (which may contain non-alphanumeric characters).
-func containsWordOrPattern(s string, isRegex bool, text *Text) bool {
+func containsWordOrPattern(s string, isRegex bool, text *Text) (bool, []string) {
 	if !isRegex {
-		return text.uniqueToks.Contains(s)
+		ok := text.uniqueToks.Contains(s)
+		if ok {
+			return ok, []string{s}
+		}
+		return ok, []string{}
 	}
-	re := regexp.MustCompile(s)
 
-	return re.MatchString(text.raw)
+	out := regexp.MustCompile(s).FindAllString(text.raw, -1)
+	return len(out) > 0, out
 }
