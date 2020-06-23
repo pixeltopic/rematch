@@ -236,15 +236,9 @@ func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
 			}
 		default:
 			tok, isRegex := replaceIfRegex(tok)
-			res, err := containsWordOrPattern(tok, isRegex, text)
-			if err != nil {
-				return false, err
-			}
 
-			argStack.Push(res)
-
+			argStack.Push(containsWordOrPattern(tok, isRegex, text))
 		}
-
 	}
 
 	switch l := argStack.Len(); l {
@@ -270,9 +264,11 @@ func replaceIfRegex(tok string) (parsed string, isRegex bool) {
 // containsWordOrPattern matches a word or pattern against the provided text.
 // If it is not regex, will check against a set of unique words extracted from the raw text.
 // If it is, will check against the raw text (which may contain non-alphanumeric characters).
-func containsWordOrPattern(s string, isRegex bool, text *Text) (bool, error) {
+func containsWordOrPattern(s string, isRegex bool, text *Text) bool {
 	if !isRegex {
-		return text.uniqueToks.Contains(s), nil
+		return text.uniqueToks.Contains(s)
 	}
-	return regexp.MatchString(s, text.raw)
+	re := regexp.MustCompile(s)
+
+	return re.MatchString(text.raw)
 }
