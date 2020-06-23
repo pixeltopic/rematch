@@ -196,6 +196,14 @@ func TestEvalExprToRPN(t *testing.T) {
 				out: "cake,mio,cat,+,!,|,dog,|",
 			},
 			{
+				in:  "(cake|(foo+(bar|bonk))|!(mio|mio+cat+neo)|dog)",
+				out: "cake,foo,bar,bonk,|,+,|,mio,mio,|,cat,+,neo,+,!,|,dog,|",
+				evalRPN: []testEvalEntry{
+					{text: "mio cat neo", shouldMatch: false},
+					{text: "mio dog cat", shouldMatch: true},
+				},
+			},
+			{
 				in:  "(cake|(foo+(bar|bonk))|!(neo|mio+cat)|dog)",
 				out: "cake,foo,bar,bonk,|,+,|,neo,mio,|,cat,+,!,|,dog,|",
 				evalRPN: []testEvalEntry{
@@ -238,7 +246,7 @@ func TestEvalExprToRPN(t *testing.T) {
 				in:  "!((hi?the***re))",
 				out: "hi?the*re/r,!",
 				evalRPN: []testEvalEntry{
-					{text: "hi there", shouldMatch: false},
+					{text: "well hi there here's some lorem ipsum text", shouldMatch: false},
 					{text: "hithere", shouldMatch: false},
 					{text: "hithe /:-D/ re", shouldMatch: false},
 					{text: "hii there", shouldMatch: true},
