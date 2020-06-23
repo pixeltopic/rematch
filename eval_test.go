@@ -191,6 +191,18 @@ func TestEvalExprToRPN(t *testing.T) {
 					{text: "cat dog", shouldMatch: true},
 				},
 			},
+			{
+				in:  "(cake|!(mio+cat)|dog)",
+				out: "cake,mio,cat,+,!,|,dog,|",
+			},
+			{
+				in:  "(cake|(foo+(bar|bonk))|!(neo|mio+cat)|dog)",
+				out: "cake,foo,bar,bonk,|,+,|,neo,mio,|,cat,+,!,|,dog,|",
+				evalRPN: []testEvalEntry{
+					{text: "mio cat", shouldMatch: false},
+					{text: "mio dog cat", shouldMatch: true},
+				},
+			},
 		}
 		for i, entry := range entries {
 			t.Run("should all pass", func(t *testing.T) {
