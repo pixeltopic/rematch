@@ -116,23 +116,24 @@ func tokenizeExpr(expr string) ([]string, error) {
 	return tokens, nil
 }
 
-func updateNegatedSet(min, max int, rpnTokens []string, negated set.Set) set.Set {
-	for j := min; j < max; j++ {
-		//fmt.Printf("j:%d\n", j)
-		switch rpnTokens[j] {
+// updateNegatedSet tracks whether a word/pattern should be negated in the find output.
+// parens are not accounted for because they are not included in RPN form.
+// nor are * and ? operators handled because they exist as part of patterns.
+func updateNegatedSet(min int, rpnTokens []string, negated set.Set) {
+	for i := min; i < len(rpnTokens); i++ {
+		switch rpnTokens[i] {
 		case string(OPNEGATE):
 		case string(OPAND):
 		case string(OPOR):
 		case string(OPWHITESPACE):
 		default:
-			if negated.Contains(j) {
-				negated.Remove(j)
+			if negated.Contains(i) {
+				negated.Remove(i)
 			} else {
-				negated.Add(j)
+				negated.Add(i)
 			}
 		}
 	}
-	return negated
 }
 
 // shuntingYard is an implementation of the Shunting-yard algorithm.
@@ -152,6 +153,15 @@ func shuntingYard(tokens []string) ([]string, error) {
 		state            = expectOperand
 	)
 
+	identifyNegatedToks := func(op string) {
+		if op == string(OPNEGATE) {
+			for _, l := range lookbacks {
+				updateNegatedSet(l, rpnTokens, rpnTokensNegated)
+			}
+			lookbacks = []int{}
+		}
+	}
+
 	for _, tok := range tokens {
 		switch tok {
 		case string(OPAND):
@@ -170,13 +180,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 			for opStack.Len() > 0 && opStack.Peek() != string(OPGROUPL) {
 				op := opStack.Pop().(string)
 
-				if op == string(OPNEGATE) {
-					for _, l := range lookbacks {
-						//fmt.Println("or op:", len(rpnTokens))
-						rpnTokensNegated = updateNegatedSet(l, len(rpnTokens), rpnTokens, rpnTokensNegated)
-					}
-					lookbacks = []int{}
-				}
+				identifyNegatedToks(op)
 
 				rpnTokens = append(rpnTokens, op)
 			}
@@ -215,13 +219,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 				}
 				op := opStack.Pop().(string)
 
-				if op == string(OPNEGATE) {
-					for _, l := range lookbacks {
-						//fmt.Println("lparen:", len(rpnTokens))
-						rpnTokensNegated = updateNegatedSet(l, len(rpnTokens), rpnTokens, rpnTokensNegated)
-					}
-					lookbacks = []int{}
-				}
+				identifyNegatedToks(op)
 
 				rpnTokens = append(rpnTokens, op)
 			}
@@ -255,12 +253,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 		case string(OPGROUPR):
 			return nil, SyntaxError("mismatched parenthesis at end of expression")
 		case string(OPNEGATE):
-			//fmt.Println("entered")
-			for _, l := range lookbacks {
-				//fmt.Println("looped")
-				rpnTokensNegated = updateNegatedSet(l, len(rpnTokens), rpnTokens, rpnTokensNegated)
-			}
-			lookbacks = []int{}
+			identifyNegatedToks(op)
 		}
 
 		rpnTokens = append(rpnTokens, op)
