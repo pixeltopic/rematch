@@ -33,7 +33,7 @@ type testEvalEntry struct {
 }
 
 // testExprToRPN converts an expression into Reverse Polish notation.
-func testExprToRPN(expr string) ([]string, error) {
+func testExprToRPN(expr string) ([]token, error) {
 	toks, err := tokenizeExpr(expr)
 	if err != nil {
 		return nil, err
@@ -211,6 +211,15 @@ func TestEvalExprToRPN(t *testing.T) {
 					{text: "mio dog cat", shouldMatch: true},
 				},
 			},
+			{
+				in:  "cake|!(foo+!(bar|bonk))",
+				out: "cake,foo,bar,bonk,|,!,+,!,|",
+				evalRPN: []testEvalEntry{
+					{text: "mio bar cat bonk", shouldMatch: true},
+					{text: "mio cat", shouldMatch: true},
+					{text: "cake", shouldMatch: true},
+				},
+			},
 		}
 		for i, entry := range entries {
 			t.Run("should all pass", func(t *testing.T) {
@@ -257,7 +266,7 @@ func TestEvalExprToRPN(t *testing.T) {
 				out: "hi?the*re/r",
 				evalRPN: []testEvalEntry{
 					{text: "hi there", shouldMatch: true},
-					{text: "hithere", shouldMatch: true},
+					{text: "hithere hi theere", shouldMatch: true},
 					{text: "hithe /:-D/ re", shouldMatch: true},
 					{text: "hii there", shouldMatch: false},
 				},
@@ -371,7 +380,7 @@ func TestEvalExprToRPN(t *testing.T) {
 
 // testInvalidRPNHelper exists to trigger RPN evaluation errors.
 func testInvalidRPNHelper(t *testing.T, i int, entry testInvalidRPNEntry) {
-	_, err := evalRPN(strings.Split(entry.in, ","), NewText(""))
+	_, err := evalRPN(strsToTokens(strings.Split(entry.in, ",")), NewText(""))
 	if !errors.Is(entry.err, err) {
 		t.Errorf("test #%d should have err='%v', but err='%v'", i+1, entry.err, err)
 	}
@@ -399,7 +408,7 @@ func testEvalHelper(t *testing.T, i int, entry testEntry) {
 	case nil:
 		t.Errorf("test #%d should have out=%s, but out=nil", i+1, entry.out)
 	default:
-		if actualOut := strings.Join(rpn, ","); actualOut != entry.out {
+		if actualOut := strings.Join(tokensToStrs(rpn), ","); actualOut != entry.out {
 			t.Errorf("test #%d should have out=%s, but out=%s", i+1, entry.out, actualOut)
 			return
 		}
@@ -407,7 +416,7 @@ func testEvalHelper(t *testing.T, i int, entry testEntry) {
 			res, err := evalRPN(rpn, NewText(evalEntry.text))
 			if err != nil {
 				t.Errorf("test #%d:%d should have err=nil, but err=%s", i+1, j+1, err.Error())
-			} else if res != evalEntry.shouldMatch {
+			} else if res.Match != evalEntry.shouldMatch {
 				t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.shouldMatch, res)
 			}
 		}

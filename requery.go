@@ -67,5 +67,9 @@ func Eval(expr *Expr, text *Text) (bool, error) {
 		return false, err
 	}
 
-	return evalRPN(expr.rpn, text)
+	res, err := evalRPN(expr.rpn, text)
+	if err != nil {
+		return false, err
+	}
+	return res.Match, err
 }

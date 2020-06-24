@@ -38,9 +38,24 @@ func (e EvalError) Error() string {
 	return fmt.Sprintf("EvalError:%s", string(e))
 }
 
-type result struct {
+// token represents the output produced by the Shunting-yard algorithm.
+// It contains the token itself (which may be a word, pattern, or operator)
+// and if it is a word or pattern, whether it will be negated in the final matched substring set.
+type token struct {
+	Tok    string `json:"S"` // TODO: rename tok to S
+	Negate bool   `json:"N"` // TODO: rename negate to N (for unmarshalling/marshalling support)
+}
+
+// subresult is part of a result of tokens to return at the end of RPN evaluation
+type subresult struct {
 	S  []string
 	OK bool
+}
+
+// Result is the output after evaluating a query.
+type Result struct {
+	Match  bool
+	Tokens []string
 }
 
 func allowedWordChars(c rune) bool {
@@ -119,14 +134,15 @@ func tokenizeExpr(expr string) ([]string, error) {
 // updateNegatedSet tracks whether a word/pattern should be negated in the find output.
 // parens are not accounted for because they are not included in RPN form.
 // nor are * and ? operators handled because they exist as part of patterns.
-func updateNegatedSet(min int, rpnTokens []string, negated set.Set) {
+func updateNegatedSet(min int, rpnTokens []token, negated set.Set) {
 	for i := min; i < len(rpnTokens); i++ {
-		switch rpnTokens[i] {
+		switch rpnTokens[i].Tok {
 		case string(OPNEGATE):
 		case string(OPAND):
 		case string(OPOR):
 		case string(OPWHITESPACE):
 		default:
+			rpnTokens[i].Negate = !rpnTokens[i].Negate
 			if negated.Contains(i) {
 				negated.Remove(i)
 			} else {
@@ -139,14 +155,14 @@ func updateNegatedSet(min int, rpnTokens []string, negated set.Set) {
 // shuntingYard is an implementation of the Shunting-yard algorithm.
 // Produces a string slice ordered in Reverse Polish notation;
 // will err if unbalanced parenthesis or invalid expression syntax
-func shuntingYard(tokens []string) ([]string, error) {
+func shuntingYard(tokens []string) ([]token, error) {
 	const (
 		expectOperator = 0
 		expectOperand  = 1
 	)
 
 	var (
-		rpnTokens        []string
+		rpnTokens        []token
 		rpnTokensNegated = set.New() // contains the indices corresponding to rpnTokens that will be negated during eval phase. Only matters for returning matched pat/words
 		lookbacks        []int
 		opStack          = stack.New() // stack of strings; stores operators only
@@ -182,7 +198,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 
 				identifyNegatedToks(op)
 
-				rpnTokens = append(rpnTokens, op)
+				rpnTokens = append(rpnTokens, token{Tok: op})
 			}
 			opStack.Push(tok)
 			state = expectOperand
@@ -221,7 +237,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 
 				identifyNegatedToks(op)
 
-				rpnTokens = append(rpnTokens, op)
+				rpnTokens = append(rpnTokens, token{Tok: op})
 			}
 			// If the stack runs out without finding a left parenthesis, then there are mismatched parentheses.
 			if !lParenWasFound {
@@ -235,7 +251,7 @@ func shuntingYard(tokens []string) ([]string, error) {
 			}
 			// the token is not an operator; but a word.
 			// append /r to end of tok if regex
-			rpnTokens = append(rpnTokens, tok)
+			rpnTokens = append(rpnTokens, token{Tok: tok})
 			state = expectOperator
 		}
 	}
@@ -256,46 +272,47 @@ func shuntingYard(tokens []string) ([]string, error) {
 			identifyNegatedToks(op)
 		}
 
-		rpnTokens = append(rpnTokens, op)
+		rpnTokens = append(rpnTokens, token{Tok: op})
 	}
 
 	//fmt.Println(rpnTokensNegated.String())
+	//fmt.Println(rpnTokens)
 
 	return rpnTokens, nil
 }
 
 // evalRPN evaluates a slice of string tokens in Reverse Polish notation into a boolean result.
-func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
-	argStack := stack.New()            // stack of bools
-	queryResult := map[string]result{} // mapping of word or pattern keys to results.
+func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
+	argStack := stack.New()               // stack of bools
+	queryResult := map[string]subresult{} // mapping of word or pattern keys to results.
 
 	for _, tok := range rpnTokens {
-		switch tok {
+		switch str := tok.Tok; str {
 		case string(OPNEGATE):
 			if argStack.Len() < 1 {
-				return false, EvalError("less than 1 argument in stack; likely syntax error in RPN")
+				return nil, EvalError("less than 1 argument in stack; likely syntax error in RPN")
 			}
 			argStack.Push(!argStack.Pop().(bool))
 		case string(OPAND):
 			fallthrough
 		case string(OPOR):
 			if argStack.Len() < 2 {
-				return false, EvalError("less than 2 arguments in stack; likely syntax error in RPN")
+				return nil, EvalError("less than 2 arguments in stack; likely syntax error in RPN")
 			}
 			a, b := argStack.Pop().(bool), argStack.Pop().(bool)
 
-			switch tok {
+			switch str {
 			case string(OPAND):
 				argStack.Push(a && b)
 			default:
 				argStack.Push(a || b)
 			}
 		default:
-			wordOrPat, isRegex := replaceIfRegex(tok)
+			wordOrPat, isRegex := replaceIfRegex(str)
 			matches, strs := containsWordOrPattern(wordOrPat, isRegex, text)
-			queryResult[tok] = result{
+			queryResult[str] = subresult{
 				S:  strs,
-				OK: matches,
+				OK: matches && !tok.Negate,
 			}
 
 			argStack.Push(matches)
@@ -306,14 +323,23 @@ func evalRPN(rpnTokens []string, text *Text) (output bool, err error) {
 	// account for edge case where the negated index set has multiple different indices that map to the SAME key!
 	// somehow going to need to pass a 3rd shunt argument to this. might make things sorta complicated. how can i elegantly handle token metadata?
 	// eventually this should return a []string instead of a bool, but api should allow bool or []string returning. (bool can just be len([]string) > 0)
-	//fmt.Println(queryResult)
+
+	var result Result
+	for _, v := range queryResult {
+		if v.OK {
+			result.Tokens = append(result.Tokens, v.S...) // result may have duplicates.
+		}
+	}
 
 	switch l := argStack.Len(); l {
 	case 1:
-		return argStack.Pop().(bool), nil
+		result.Match = argStack.Pop().(bool)
 	default:
-		return false, EvalError("invalid element count in stack at end of evaluation")
+		return nil, EvalError("invalid element count in stack at end of evaluation")
 	}
+
+	//fmt.Println("result", result)
+	return &result, nil
 }
 
 func replaceIfRegex(tok string) (parsed string, isRegex bool) {

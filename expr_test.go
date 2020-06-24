@@ -129,7 +129,7 @@ func testExprHelper(t *testing.T, i int, entry testExprEntry) {
 		t.Errorf("test #%d failed JSON comparison", i+1)
 	}
 
-	if compiledRPN := strings.Join(expr.rpn, ","); compiledRPN != entry.expectedRPN {
+	if compiledRPN := strings.Join(tokensToStrs(expr.rpn), ","); compiledRPN != entry.expectedRPN {
 		t.Errorf("test #%d should have out=[%s], but out=[%s]", i+1, entry.expectedRPN, compiledRPN)
 		return
 	}
