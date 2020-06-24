@@ -2,6 +2,7 @@ package requery
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -418,6 +419,8 @@ func testEvalHelper(t *testing.T, i int, entry testEntry) {
 				t.Errorf("test #%d:%d should have err=nil, but err=%s", i+1, j+1, err.Error())
 			} else if res.Match != evalEntry.shouldMatch {
 				t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.shouldMatch, res)
+			} else {
+				fmt.Printf("test #%d:%d: %v\n", i+1, j+1, res.Tokens)
 			}
 		}
 

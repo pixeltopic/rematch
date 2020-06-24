@@ -5,8 +5,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pixeltopic/requery/internal/set"
-
 	"github.com/pixeltopic/requery/internal/stack"
 )
 
@@ -53,6 +51,8 @@ type subresult struct {
 }
 
 // Result is the output after evaluating a query.
+//
+// Tokens contains a non-unique/ordered collection of word and/or pattern matches. Negated tokens will not be present.
 type Result struct {
 	Match  bool
 	Tokens []string
@@ -131,23 +131,17 @@ func tokenizeExpr(expr string) ([]string, error) {
 	return tokens, nil
 }
 
-// updateNegatedSet tracks whether a word/pattern should be negated in the find output.
+// negateToks tracks whether a token (word or pattern) should be negated in the find output.
 // parens are not accounted for because they are not included in RPN form.
 // nor are * and ? operators handled because they exist as part of patterns.
-func updateNegatedSet(min int, rpnTokens []token, negated set.Set) {
+func negateToks(min int, rpnTokens []token) {
 	for i := min; i < len(rpnTokens); i++ {
 		switch rpnTokens[i].Tok {
 		case string(OPNEGATE):
 		case string(OPAND):
 		case string(OPOR):
-		case string(OPWHITESPACE):
 		default:
 			rpnTokens[i].Negate = !rpnTokens[i].Negate
-			if negated.Contains(i) {
-				negated.Remove(i)
-			} else {
-				negated.Add(i)
-			}
 		}
 	}
 }
@@ -162,17 +156,18 @@ func shuntingYard(tokens []string) ([]token, error) {
 	)
 
 	var (
-		rpnTokens        []token
-		rpnTokensNegated = set.New() // contains the indices corresponding to rpnTokens that will be negated during eval phase. Only matters for returning matched pat/words
-		lookbacks        []int
-		opStack          = stack.New() // stack of strings; stores operators only
-		state            = expectOperand
+		rpnTokens []token
+		lookbacks []int
+		// lookbacks is a slice of ints which contain the minimum index to start searching for tokens to negate before the slice is flushed.
+		// Indices are appended when a negation operator is encountered.
+		opStack = stack.New() // stack of strings; stores operators only
+		state   = expectOperand
 	)
 
 	identifyNegatedToks := func(op string) {
 		if op == string(OPNEGATE) {
 			for _, l := range lookbacks {
-				updateNegatedSet(l, rpnTokens, rpnTokensNegated)
+				negateToks(l, rpnTokens)
 			}
 			lookbacks = []int{}
 		}
@@ -320,12 +315,6 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 	}
 
 	var result Result
-	for _, v := range queryResult {
-		if v.OK {
-			result.Tokens = append(result.Tokens, v.S...) // result may have duplicates.
-		}
-	}
-
 	switch l := argStack.Len(); l {
 	case 1:
 		result.Match = argStack.Pop().(bool)
@@ -333,7 +322,13 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 		return nil, EvalError("invalid element count in stack at end of evaluation")
 	}
 
-	//fmt.Println("result", result)
+	if result.Match {
+		for _, v := range queryResult {
+			if v.OK {
+				result.Tokens = append(result.Tokens, v.S...) // result may have duplicates.
+			}
+		}
+	}
 	return &result, nil
 }
 
