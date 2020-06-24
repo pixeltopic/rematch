@@ -22,9 +22,15 @@ func TestExpr(t *testing.T) {
 	t.Run("valid expression compiling into RPN and JSON encoding/decoding", func(t *testing.T) {
 		entries := []testExprEntry{
 			{
+				raw:          "!tasty|delish",
+				expectedRPN:  "tasty,!,delish,|",
+				expectedJSON: `{"raw":"!tasty|delish","rpn":[{"s":"tasty","!":true},{"s":"!"},{"s":"delish"},{"s":"|"}],"compiled":true}`,
+				evalRPN:      []testEvalEntry{},
+			},
+			{
 				raw:          "barfoo|(foobar)",
 				expectedRPN:  "barfoo,foobar,|",
-				expectedJSON: `{"raw":"barfoo|(foobar)","rpn":["barfoo","foobar","|"],"compiled":true}`,
+				expectedJSON: `{"raw":"barfoo|(foobar)","rpn":[{"s":"barfoo"},{"s":"foobar"},{"s":"|"}],"compiled":true}`,
 				evalRPN: []testEvalEntry{
 					{text: "this is a basic example of some text foobar", shouldMatch: true},
 					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true},
@@ -35,7 +41,7 @@ func TestExpr(t *testing.T) {
 			{
 				raw:          "((((ch?ips))))|(fish***+(((tasty))))",
 				expectedRPN:  "ch?ips/r,fish*/r,tasty,+,|",
-				expectedJSON: `{"raw":"((((ch?ips))))|(fish***+(((tasty))))","rpn":["ch?ips/r","fish*/r","tasty","+","|"],"compiled":true}`,
+				expectedJSON: `{"raw":"((((ch?ips))))|(fish***+(((tasty))))","rpn":[{"s":"ch?ips/r"},{"s":"fish*/r"},{"s":"tasty"},{"s":"+"},{"s":"|"}],"compiled":true}`,
 				evalRPN: []testEvalEntry{
 					{text: "chips fish tasty", shouldMatch: true},
 					{text: "fish tasty", shouldMatch: true},

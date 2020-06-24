@@ -74,19 +74,19 @@ func (e *Expr) Compile() error {
 }
 
 type auxExpr struct {
-	Raw      string   `json:"raw"`
-	Rpn      []string `json:"rpn"`
-	Compiled bool     `json:"compiled"`
+	Raw      string  `json:"raw"`
+	Rpn      []token `json:"rpn"`
+	Compiled bool    `json:"compiled"`
 }
 
 // MarshalJSON implements JSON marshalling
 func (e *Expr) MarshalJSON() ([]byte, error) {
 
-	var rpn []string
+	var rpn []token
 	if e.rpn == nil {
-		rpn = []string{}
+		rpn = []token{}
 	} else {
-		rpn = tokensToStrs(e.rpn) // TODO: temporary conversion; must keep track of negated tokens in the future within the json
+		rpn = e.rpn
 	}
 
 	return json.Marshal(&auxExpr{
@@ -105,7 +105,7 @@ func (e *Expr) UnmarshalJSON(data []byte) error {
 	}
 
 	e.raw = aux.Raw
-	e.rpn = strsToTokens(aux.Rpn)
+	e.rpn = aux.Rpn
 	e.compiled = aux.Compiled
 
 	return nil

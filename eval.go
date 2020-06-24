@@ -42,8 +42,8 @@ func (e EvalError) Error() string {
 // It contains the token itself (which may be a word, pattern, or operator)
 // and if it is a word or pattern, whether it will be negated in the final matched substring set.
 type token struct {
-	Tok    string `json:"S"` // TODO: rename tok to S
-	Negate bool   `json:"N"` // TODO: rename negate to N (for unmarshalling/marshalling support)
+	Tok    string `json:"s"`
+	Negate bool   `json:"!,omitempty"`
 }
 
 // subresult is part of a result of tokens to return at the end of RPN evaluation
@@ -319,11 +319,6 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 		}
 	}
 
-	// TODO: compare this queryResult with the negated index set and negate all equal keys from queryResult.
-	// account for edge case where the negated index set has multiple different indices that map to the SAME key!
-	// somehow going to need to pass a 3rd shunt argument to this. might make things sorta complicated. how can i elegantly handle token metadata?
-	// eventually this should return a []string instead of a bool, but api should allow bool or []string returning. (bool can just be len([]string) > 0)
-
 	var result Result
 	for _, v := range queryResult {
 		if v.OK {
@@ -353,7 +348,6 @@ func replaceIfRegex(tok string) (parsed string, isRegex bool) {
 	return tok, false
 }
 
-// TODO: write tests involving wildcard matching. Possibly return a slice of matching strings
 // containsWordOrPattern matches a word or pattern against the provided text.
 // If it is not regex, will check against a set of unique words extracted from the raw text.
 // If it is, will check against the raw text (which may contain non-alphanumeric characters).
