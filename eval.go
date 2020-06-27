@@ -41,13 +41,13 @@ func (e EvalError) Error() string {
 // and if it is a word or pattern, whether it will be negated in the final matched substring set.
 type token struct {
 	Tok    string `json:"s"`
-	Negate bool   `json:"!,omitempty"`
+	Negate bool   `json:"!,omitempty"` // negate match result in the subresult during RPN step
 }
 
 // subresult is part of a result of tokens to return at the end of RPN evaluation
 type subresult struct {
 	S  []string
-	OK bool
+	OK bool // append contents of S into final token slice if true
 }
 
 // Result is the output after evaluating a query.
@@ -306,20 +306,26 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 			wordOrPat, isRegex := replaceIfRegex(str)
 			matches, s := containsWordOrPattern(wordOrPat, isRegex, text)
 			if _, ok := auxResult[str]; ok {
-				nextState := auxResult[str].OK || (matches && !tok.Negate)
 
-				if nextState {
+				// only append matched tokens into subresult if it matches and is not negated
+				if matches && !tok.Negate {
 					auxResult[str].S = append(auxResult[str].S, s...)
 				}
 
-				auxResult[str].OK = nextState
+				// new state must consider previous state if there was already a match for [str]
+				auxResult[str].OK = auxResult[str].OK || (matches && !tok.Negate)
 			} else {
-				auxResult[str] = &subresult{
-					S:  s,
+				subr := &subresult{
 					OK: matches && !tok.Negate,
 					// later on in the RPN evaluation, whatever the result of this match will be negated by the ! operator.
 					// we track state earlier and separately from the arg stack (which only stores the boolean output of the expression)
 				}
+
+				if subr.OK {
+					subr.S = s
+				}
+
+				auxResult[str] = subr
 			}
 
 			argStack.Push(matches)
