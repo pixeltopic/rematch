@@ -57,6 +57,14 @@ func TestEvalExprToRPN(t *testing.T) {
 				},
 			},
 			{
+				in:  "((Foo))",
+				out: "Foo",
+				evalRPN: []testEvalEntry{
+					{text: "this is a basic example of some text Foo bar", shouldMatch: true},
+					{text: "this is a basic example of some text foo bar", shouldMatch: false},
+				},
+			},
+			{
 				in:  "barfoo|(foobar)",
 				out: "barfoo,foobar,|",
 				evalRPN: []testEvalEntry{
@@ -72,7 +80,16 @@ func TestEvalExprToRPN(t *testing.T) {
 				evalRPN: []testEvalEntry{
 					{text: "mio FBK collab when", shouldMatch: true},
 					{text: "mio FBK collab when and dog", shouldMatch: true},
-					{text: "dog mio some other stuff mio", shouldMatch: false},
+					{text: "dog mio some other stuff mio", shouldMatch: false}, // true || true && false == false
+				},
+			},
+			{
+				in:  "dog|(mio+FBK)",
+				out: "dog,mio,FBK,+,|",
+				evalRPN: []testEvalEntry{
+					{text: "mio FBK collab when", shouldMatch: true},
+					{text: "mio FBK collab when and dog", shouldMatch: true},
+					{text: "dog mio some other stuff mio", shouldMatch: true}, // true || (true && false) == true
 				},
 			},
 			{
@@ -143,6 +160,16 @@ func TestEvalExprToRPN(t *testing.T) {
 			{
 				in:  "!foo|foo", // it is impossible for this expression to evaluate to false
 				out: "foo,!,foo,|",
+				evalRPN: []testEvalEntry{
+					{text: "", shouldMatch: true},
+					{text: "foo", shouldMatch: true},
+					{text: "bar", shouldMatch: true},
+					{text: "foo bar", shouldMatch: true},
+				},
+			},
+			{
+				in:  "foo|!foo", // it is impossible for this expression to evaluate to false. Different from previous due to order for like tokens affecting returned token set
+				out: "foo,foo,!,|",
 				evalRPN: []testEvalEntry{
 					{text: "", shouldMatch: true},
 					{text: "foo", shouldMatch: true},
