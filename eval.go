@@ -304,12 +304,18 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 			}
 		default:
 			wordOrPat, isRegex := replaceIfRegex(str)
-			matches, strs := containsWordOrPattern(wordOrPat, isRegex, text)
+			matches, s := containsWordOrPattern(wordOrPat, isRegex, text)
 			if _, ok := auxResult[str]; ok {
-				auxResult[str].OK = auxResult[str].OK || (matches && !tok.Negate)
+				nextState := auxResult[str].OK || (matches && !tok.Negate)
+
+				if nextState {
+					auxResult[str].S = append(auxResult[str].S, s...)
+				}
+
+				auxResult[str].OK = nextState
 			} else {
 				auxResult[str] = &subresult{
-					S:  strs,
+					S:  s,
 					OK: matches && !tok.Negate,
 					// later on in the RPN evaluation, whatever the result of this match will be negated by the ! operator.
 					// we track state earlier and separately from the arg stack (which only stores the boolean output of the expression)
