@@ -278,8 +278,8 @@ func shuntingYard(tokens []string) ([]token, error) {
 
 // evalRPN evaluates a slice of string tokens in Reverse Polish notation into a boolean result.
 func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
-	argStack := stack.New()               // stack of bools
-	queryResult := map[string]subresult{} // mapping of word or pattern keys to results.
+	argStack := stack.New()              // stack of bools
+	auxResult := map[string]*subresult{} // mapping of word or pattern keys to results.
 
 	for _, tok := range rpnTokens {
 		switch str := tok.Tok; str {
@@ -305,9 +305,15 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 		default:
 			wordOrPat, isRegex := replaceIfRegex(str)
 			matches, strs := containsWordOrPattern(wordOrPat, isRegex, text)
-			queryResult[str] = subresult{
-				S:  strs,
-				OK: matches && !tok.Negate,
+			if _, ok := auxResult[str]; ok {
+				auxResult[str].OK = auxResult[str].OK || (matches && !tok.Negate)
+			} else {
+				auxResult[str] = &subresult{
+					S:  strs,
+					OK: matches && !tok.Negate,
+					// later on in the RPN evaluation, whatever the result of this match will be negated by the ! operator.
+					// we track state earlier and separately from the arg stack (which only stores the boolean output of the expression)
+				}
 			}
 
 			argStack.Push(matches)
@@ -323,7 +329,7 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 	}
 
 	if result.Match {
-		for _, v := range queryResult {
+		for _, v := range auxResult {
 			if v.OK {
 				result.Tokens = append(result.Tokens, v.S...) // result may have duplicates.
 			}
