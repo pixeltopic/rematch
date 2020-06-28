@@ -36,26 +36,27 @@ func (e EvalError) Error() string {
 	return fmt.Sprintf("EvalError:%s", string(e))
 }
 
-// token represents the output produced by the Shunting-yard algorithm.
+// token represents a piece of the output produced by the Shunting-yard algorithm.
 // It contains the token itself (which may be a word, pattern, or operator)
-// and if it is a word or pattern, whether it will be negated in the final matched substring set.
+// and if it is a word or pattern, whether it will be negated when building subresults.
 type token struct {
 	Tok    string `json:"s"`
 	Negate bool   `json:"!,omitempty"` // negate match result in the subresult during RPN step
 }
 
-// subresult is part of a result of tokens to return at the end of RPN evaluation
+// subresult is an intermediary struct for tracking whether a collection of matching strings should be returned
+// at the end of evalRPN's execution
 type subresult struct {
-	S  []string
-	OK bool // append contents of S into final token slice if true
+	Strings []string
+	OK      bool // the contents of subresult.Strings should be concatenated to Result.strings at the end of evaluation if this is true and Result.Match is true
 }
 
 // Result is the output after evaluating a query.
 //
-// Tokens contains a non-unique/ordered collection of word and/or pattern matches. Negated tokens will not be present.
+// Strings contains a non-unique/non-ordered collection of token matches from the given expression.
 type Result struct {
-	Match  bool
-	Tokens []string
+	Match   bool
+	Strings []string
 }
 
 func allowedWordChars(c rune) bool {
@@ -270,9 +271,6 @@ func shuntingYard(tokens []string) ([]token, error) {
 		rpnTokens = append(rpnTokens, token{Tok: op})
 	}
 
-	//fmt.Println(rpnTokensNegated.String())
-	//fmt.Println(rpnTokens)
-
 	return rpnTokens, nil
 }
 
@@ -309,7 +307,7 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 
 				// only append matched tokens into subresult if it matches and is not negated
 				if matches && !tok.Negate {
-					auxResult[str].S = append(auxResult[str].S, s...)
+					auxResult[str].Strings = append(auxResult[str].Strings, s...)
 				}
 
 				// new state must consider previous state if there was already a match for [str]
@@ -322,7 +320,7 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 				}
 
 				if subr.OK {
-					subr.S = s
+					subr.Strings = s
 				}
 
 				auxResult[str] = subr
@@ -343,7 +341,7 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 	if result.Match {
 		for _, v := range auxResult {
 			if v.OK {
-				result.Tokens = append(result.Tokens, v.S...) // result may have duplicates.
+				result.Strings = append(result.Strings, v.Strings...) // result may have duplicates.
 			}
 		}
 	}

@@ -497,10 +497,9 @@ func testEvalHelper(t *testing.T, i int, entry testEntry) {
 				t.Errorf("test #%d:%d should have err=nil, but err=%s", i+1, j+1, err.Error())
 			} else if res.Match != evalEntry.shouldMatch {
 				t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.shouldMatch, res.Match)
-			} else if !testUnorderedSliceEq(res.Tokens, evalEntry.toks) {
-				t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.toks, res.Tokens)
+			} else if !testUnorderedSliceEq(res.Strings, evalEntry.toks) {
+				t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.toks, res.Strings)
 			}
-			//fmt.Printf("test #%d:%d: %v len=%d\n", i+1, j+1, res.Tokens, len(res.Tokens))
 		}
 
 	}
