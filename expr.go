@@ -21,7 +21,7 @@ func strsToTokens(strs []string) []token {
 	return t
 }
 
-// Expr is an expression written in requery.
+// Expr represents a Rematch expression.
 type Expr struct {
 	raw      string  // raw expression
 	rpn      []token // expression in RPN form
