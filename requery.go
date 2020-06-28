@@ -62,10 +62,33 @@ func EvalExpr(expr *Expr, s string) (bool, error) {
 
 // Eval matches an expression against text
 func Eval(expr *Expr, text *Text) (bool, error) {
+	res, err := FindAll(expr, text)
+	if err != nil {
+		return false, nil
+	}
+	return res.Match, nil
+}
+
+// RawExprFindAll matches a raw expression against a string, returning all matched tokens if true
+func RawExprFindAll(expr, s string) (*Result, error) {
+	return ExprFindAll(NewExpr(expr), s)
+}
+
+// ExprFindAll matches an expression against a string, returning all matched tokens if true
+func ExprFindAll(expr *Expr, s string) (*Result, error) {
+	return FindAll(expr, NewText(s))
+}
+
+// FindAll matches an expression against text, returning all matched tokens if true
+func FindAll(expr *Expr, text *Text) (*Result, error) {
 	err := expr.Compile()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	return evalRPN(expr.rpn, text)
+	res, err := evalRPN(expr.rpn, text)
+	if err != nil {
+		return nil, err
+	}
+	return res, err
 }

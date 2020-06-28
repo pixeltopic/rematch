@@ -22,12 +22,18 @@ func TestExpr(t *testing.T) {
 	t.Run("valid expression compiling into RPN and JSON encoding/decoding", func(t *testing.T) {
 		entries := []testExprEntry{
 			{
+				raw:          "!tasty|delish",
+				expectedRPN:  "tasty,!,delish,|",
+				expectedJSON: `{"raw":"!tasty|delish","rpn":[{"s":"tasty","!":true},{"s":"!"},{"s":"delish"},{"s":"|"}],"compiled":true}`,
+				evalRPN:      []testEvalEntry{},
+			},
+			{
 				raw:          "barfoo|(foobar)",
 				expectedRPN:  "barfoo,foobar,|",
-				expectedJSON: `{"raw":"barfoo|(foobar)","rpn":["barfoo","foobar","|"],"compiled":true}`,
+				expectedJSON: `{"raw":"barfoo|(foobar)","rpn":[{"s":"barfoo"},{"s":"foobar"},{"s":"|"}],"compiled":true}`,
 				evalRPN: []testEvalEntry{
-					{text: "this is a basic example of some text foobar", shouldMatch: true},
-					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true},
+					{text: "this is a basic example of some text foobar", shouldMatch: true, strs: []string{"foobar"}},
+					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true, strs: []string{"barfoo"}},
 					{text: "this is a bar foo basic example of some text foo bar", shouldMatch: false},
 					{text: "this is a basic example foo of some text bar", shouldMatch: false},
 				},
@@ -35,11 +41,11 @@ func TestExpr(t *testing.T) {
 			{
 				raw:          "((((ch?ips))))|(fish***+(((tasty))))",
 				expectedRPN:  "ch?ips/r,fish*/r,tasty,+,|",
-				expectedJSON: `{"raw":"((((ch?ips))))|(fish***+(((tasty))))","rpn":["ch?ips/r","fish*/r","tasty","+","|"],"compiled":true}`,
+				expectedJSON: `{"raw":"((((ch?ips))))|(fish***+(((tasty))))","rpn":[{"s":"ch?ips/r"},{"s":"fish*/r"},{"s":"tasty"},{"s":"+"},{"s":"|"}],"compiled":true}`,
 				evalRPN: []testEvalEntry{
-					{text: "chips fish tasty", shouldMatch: true},
-					{text: "fish tasty", shouldMatch: true},
-					{text: "chiips", shouldMatch: true},
+					{text: "chips fish tasty", shouldMatch: true, strs: []string{"fish", "tasty", "chips"}}, // "fish tasty" is not a returned match because of regex behavior
+					{text: "fish tasty", shouldMatch: true, strs: []string{"fish", "tasty"}},
+					{text: "chiips", shouldMatch: true, strs: []string{"chiips"}},
 					{text: "fish", shouldMatch: false},
 				},
 			},
@@ -129,16 +135,18 @@ func testExprHelper(t *testing.T, i int, entry testExprEntry) {
 		t.Errorf("test #%d failed JSON comparison", i+1)
 	}
 
-	if compiledRPN := strings.Join(expr.rpn, ","); compiledRPN != entry.expectedRPN {
+	if compiledRPN := strings.Join(tokensToStrs(expr.rpn), ","); compiledRPN != entry.expectedRPN {
 		t.Errorf("test #%d should have out=[%s], but out=[%s]", i+1, entry.expectedRPN, compiledRPN)
 		return
 	}
 	for j, evalEntry := range entry.evalRPN {
-		res, err := Eval(expr, NewText(evalEntry.text))
+		res, err := FindAll(expr, NewText(evalEntry.text))
 		if err != nil {
 			t.Errorf("test #%d:%d should have err=nil, but err=%s", i+1, j+1, err.Error())
-		} else if res != evalEntry.shouldMatch {
-			t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.shouldMatch, res)
+		} else if res.Match != evalEntry.shouldMatch {
+			t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.shouldMatch, res.Match)
+		} else if !testUnorderedSliceEq(res.Strings, evalEntry.strs) {
+			t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.strs, res.Strings)
 		}
 	}
 
