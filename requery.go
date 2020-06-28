@@ -1,9 +1,9 @@
-package requery
+package rematch
 
 import (
 	"strings"
 
-	"github.com/pixeltopic/requery/internal/set"
+	"github.com/pixeltopic/rematch/internal/set"
 )
 
 // replaceNonAlphaNum removes all non-alphanumeric characters, replacing them with spaces.

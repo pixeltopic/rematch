@@ -1,4 +1,4 @@
-package requery
+package rematch
 
 import (
 	"errors"

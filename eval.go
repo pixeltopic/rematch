@@ -1,11 +1,11 @@
-package requery
+package rematch
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/pixeltopic/requery/internal/stack"
+	"github.com/pixeltopic/rematch/internal/stack"
 )
 
 // expression operators
