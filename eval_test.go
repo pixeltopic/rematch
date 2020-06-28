@@ -32,7 +32,7 @@ type testInvalidRPNEntry struct {
 type testEvalEntry struct {
 	text        string
 	shouldMatch bool
-	toks        []string // unordered slice of toks that should have been matched during evaluation
+	strs        []string // unordered slice of strs that should have been matched during evaluation
 }
 
 // testExprToRPN converts an expression into Reverse Polish notation.
@@ -72,7 +72,7 @@ func TestEvalExprToRPN(t *testing.T) {
 				in:  "Foo",
 				out: "Foo",
 				evalRPN: []testEvalEntry{
-					{text: "this is a basic example of some text Foo bar", shouldMatch: true, toks: []string{"Foo"}},
+					{text: "this is a basic example of some text Foo bar", shouldMatch: true, strs: []string{"Foo"}},
 					{text: "this is a basic example of some text foo bar", shouldMatch: false},
 				},
 			},
@@ -80,7 +80,7 @@ func TestEvalExprToRPN(t *testing.T) {
 				in:  "((Foo))",
 				out: "Foo",
 				evalRPN: []testEvalEntry{
-					{text: "this is a basic example of some text Foo bar", shouldMatch: true, toks: []string{"Foo"}},
+					{text: "this is a basic example of some text Foo bar", shouldMatch: true, strs: []string{"Foo"}},
 					{text: "this is a basic example of some text foo bar", shouldMatch: false},
 				},
 			},
@@ -88,8 +88,8 @@ func TestEvalExprToRPN(t *testing.T) {
 				in:  "barfoo|(foobar)",
 				out: "barfoo,foobar,|",
 				evalRPN: []testEvalEntry{
-					{text: "this is a basic example of some text foobar", shouldMatch: true, toks: []string{"foobar"}},
-					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true, toks: []string{"barfoo"}},
+					{text: "this is a basic example of some text foobar", shouldMatch: true, strs: []string{"foobar"}},
+					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true, strs: []string{"barfoo"}},
 					{text: "this is a bar foo basic example of some text foo bar", shouldMatch: false},
 					{text: "this is a basic example foo of some text bar", shouldMatch: false},
 				},
@@ -98,8 +98,8 @@ func TestEvalExprToRPN(t *testing.T) {
 				in:  "dog|mio+FBK",
 				out: "dog,mio,|,FBK,+",
 				evalRPN: []testEvalEntry{
-					{text: "mio FBK collab when", shouldMatch: true, toks: []string{"mio", "FBK"}},
-					{text: "mio FBK collab when and dog", shouldMatch: true, toks: []string{"dog", "mio", "FBK"}},
+					{text: "mio FBK collab when", shouldMatch: true, strs: []string{"mio", "FBK"}},
+					{text: "mio FBK collab when and dog", shouldMatch: true, strs: []string{"dog", "mio", "FBK"}},
 					{text: "dog mio some other stuff mio", shouldMatch: false}, // true || true && false == false
 				},
 			},
@@ -107,9 +107,9 @@ func TestEvalExprToRPN(t *testing.T) {
 				in:  "dog|(mio+FBK)",
 				out: "dog,mio,FBK,+,|",
 				evalRPN: []testEvalEntry{
-					{text: "mio FBK collab when", shouldMatch: true, toks: []string{"mio", "FBK"}},
-					{text: "mio FBK collab when and dog", shouldMatch: true, toks: []string{"dog", "mio", "FBK"}},
-					{text: "dog mio some other stuff mio", shouldMatch: true, toks: []string{"dog", "mio"}}, // true || (true && false) == true
+					{text: "mio FBK collab when", shouldMatch: true, strs: []string{"mio", "FBK"}},
+					{text: "mio FBK collab when and dog", shouldMatch: true, strs: []string{"dog", "mio", "FBK"}},
+					{text: "dog mio some other stuff mio", shouldMatch: true, strs: []string{"dog", "mio"}}, // true || (true && false) == true
 				},
 			},
 			{
@@ -118,9 +118,9 @@ func TestEvalExprToRPN(t *testing.T) {
 				evalRPN: []testEvalEntry{
 					{text: "fox", shouldMatch: false},
 					{text: "fbk fox", shouldMatch: false},
-					{text: "fox FBK", shouldMatch: true, toks: []string{"fox", "FBK"}},
-					{text: "dog", shouldMatch: true, toks: []string{"dog"}},
-					{text: "cat lel mio", shouldMatch: true, toks: []string{"cat", "mio"}},
+					{text: "fox FBK", shouldMatch: true, strs: []string{"fox", "FBK"}},
+					{text: "dog", shouldMatch: true, strs: []string{"dog"}},
+					{text: "cat lel mio", shouldMatch: true, strs: []string{"cat", "mio"}},
 				},
 			},
 			{
@@ -182,7 +182,7 @@ func TestEvalExprToRPN(t *testing.T) {
 				in:  "!!foo",
 				out: "foo,!,!",
 				evalRPN: []testEvalEntry{
-					{text: "foo", shouldMatch: true, toks: []string{"foo"}},
+					{text: "foo", shouldMatch: true, strs: []string{"foo"}},
 					{text: "bar", shouldMatch: false},
 				},
 			},
@@ -209,9 +209,9 @@ func TestEvalExprToRPN(t *testing.T) {
 				out: "foo,!,foo,|",
 				evalRPN: []testEvalEntry{
 					{text: "", shouldMatch: true},
-					{text: "foo", shouldMatch: true, toks: []string{"foo"}},
+					{text: "foo", shouldMatch: true, strs: []string{"foo"}},
 					{text: "bar", shouldMatch: true},
-					{text: "foo bar", shouldMatch: true, toks: []string{"foo"}},
+					{text: "foo bar", shouldMatch: true, strs: []string{"foo"}},
 				},
 			},
 			{
@@ -219,18 +219,18 @@ func TestEvalExprToRPN(t *testing.T) {
 				out: "foo,foo,!,|",
 				evalRPN: []testEvalEntry{
 					{text: "", shouldMatch: true},
-					{text: "foo", shouldMatch: true, toks: []string{"foo"}},
+					{text: "foo", shouldMatch: true, strs: []string{"foo"}},
 					{text: "bar", shouldMatch: true},
-					{text: "foo bar", shouldMatch: true, toks: []string{"foo"}},
+					{text: "foo bar", shouldMatch: true, strs: []string{"foo"}},
 				},
 			},
 			{
 				in:  "!(!((golang|Golang)+python))",
 				out: "golang,Golang,|,python,+,!,!",
 				evalRPN: []testEvalEntry{
-					{text: "python, go, golang!", shouldMatch: true, toks: []string{"golang", "python"}},
+					{text: "python, go, golang!", shouldMatch: true, strs: []string{"golang", "python"}},
 					{text: "GO! Go, Golang", shouldMatch: false},
-					{text: "Py, Golang, python", shouldMatch: true, toks: []string{"Golang", "python"}},
+					{text: "Py, Golang, python", shouldMatch: true, strs: []string{"Golang", "python"}},
 					{text: "python", shouldMatch: false},
 				},
 			},
@@ -238,8 +238,8 @@ func TestEvalExprToRPN(t *testing.T) {
 				in:  "!!barfoo|(foobar)",
 				out: "barfoo,!,!,foobar,|",
 				evalRPN: []testEvalEntry{
-					{text: "this is a basic example of some text foobar", shouldMatch: true, toks: []string{"foobar"}},
-					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true, toks: []string{"barfoo"}},
+					{text: "this is a basic example of some text foobar", shouldMatch: true, strs: []string{"foobar"}},
+					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true, strs: []string{"barfoo"}},
 					{text: "this is a bar foo basic example of some text foo bar", shouldMatch: false},
 					{text: "this is a basic example foo of some text bar", shouldMatch: false},
 				},
@@ -250,9 +250,9 @@ func TestEvalExprToRPN(t *testing.T) {
 				evalRPN: []testEvalEntry{
 					{text: "fox", shouldMatch: true}, // NOT mio and NOT cat evaluates to true when matching this.
 					{text: "mio cat", shouldMatch: false},
-					{text: "dog mio cat", shouldMatch: true, toks: []string{"dog"}},
-					{text: "dog", shouldMatch: true, toks: []string{"dog"}},
-					{text: "cat dog", shouldMatch: true, toks: []string{"dog"}},
+					{text: "dog mio cat", shouldMatch: true, strs: []string{"dog"}},
+					{text: "dog", shouldMatch: true, strs: []string{"dog"}},
+					{text: "cat dog", shouldMatch: true, strs: []string{"dog"}},
 				},
 			},
 			{
@@ -261,9 +261,9 @@ func TestEvalExprToRPN(t *testing.T) {
 				evalRPN: []testEvalEntry{
 					{text: "fox", shouldMatch: true}, // NOT mio and NOT cat evaluates to true when matching this.
 					{text: "mio cat", shouldMatch: false},
-					{text: "dog mio cat", shouldMatch: true, toks: []string{"dog"}},
-					{text: "dog", shouldMatch: true, toks: []string{"dog"}},
-					{text: "cat dog", shouldMatch: true, toks: []string{"dog"}},
+					{text: "dog mio cat", shouldMatch: true, strs: []string{"dog"}},
+					{text: "dog", shouldMatch: true, strs: []string{"dog"}},
+					{text: "cat dog", shouldMatch: true, strs: []string{"dog"}},
 				},
 			},
 			{
@@ -275,7 +275,7 @@ func TestEvalExprToRPN(t *testing.T) {
 				out: "cake,foo,bar,bonk,|,+,|,mio,mio,|,cat,+,neo,+,!,|,dog,|",
 				evalRPN: []testEvalEntry{
 					{text: "mio cat neo", shouldMatch: false},
-					{text: "mio dog cat", shouldMatch: true, toks: []string{"dog"}},
+					{text: "mio dog cat", shouldMatch: true, strs: []string{"dog"}},
 				},
 			},
 			{
@@ -283,16 +283,16 @@ func TestEvalExprToRPN(t *testing.T) {
 				out: "cake,foo,bar,bonk,|,+,|,neo,mio,|,cat,+,!,|,dog,|",
 				evalRPN: []testEvalEntry{
 					{text: "mio cat", shouldMatch: false},
-					{text: "mio dog cat", shouldMatch: true, toks: []string{"dog"}},
+					{text: "mio dog cat", shouldMatch: true, strs: []string{"dog"}},
 				},
 			},
 			{
 				in:  "cake|!(foo+!(bar|bonk))",
 				out: "cake,foo,bar,bonk,|,!,+,!,|",
 				evalRPN: []testEvalEntry{
-					{text: "mio bar cat bonk", shouldMatch: true, toks: []string{"bar", "bonk"}},
+					{text: "mio bar cat bonk", shouldMatch: true, strs: []string{"bar", "bonk"}},
 					{text: "mio cat", shouldMatch: true},
-					{text: "cake", shouldMatch: true, toks: []string{"cake"}},
+					{text: "cake", shouldMatch: true, strs: []string{"cake"}},
 				},
 			},
 		}
@@ -309,9 +309,9 @@ func TestEvalExprToRPN(t *testing.T) {
 				in:  "hi|hi|hi+hi+hi|hi+*hi",
 				out: "hi,hi,|,hi,|,hi,+,hi,+,hi,|,*hi/r,+",
 				evalRPN: []testEvalEntry{
-					{text: "hi", shouldMatch: true, toks: []string{"hi", "hi", "hi", "hi", "hi", "hi", "hi"}},
+					{text: "hi", shouldMatch: true, strs: []string{"hi", "hi", "hi", "hi", "hi", "hi", "hi"}},
 					{text: "hhi", shouldMatch: false},
-					{text: "hi hi hi", shouldMatch: true, toks: []string{"hi", "hi", "hi", "hi", "hi", "hi", "hi", " hi", " hi"}},
+					{text: "hi hi hi", shouldMatch: true, strs: []string{"hi", "hi", "hi", "hi", "hi", "hi", "hi", " hi", " hi"}},
 					{text: "ih", shouldMatch: false},
 				},
 			},
@@ -320,10 +320,10 @@ func TestEvalExprToRPN(t *testing.T) {
 				out: "https???www?google?com*/r",
 				evalRPN: []testEvalEntry{
 					{text: "https", shouldMatch: false},
-					{text: "here's a link: https://www.google.com", shouldMatch: true, toks: []string{"https://www.google.com"}},
-					{text: "here's a link:https://www.google.com/", shouldMatch: true, toks: []string{"https://www.google.com"}},
+					{text: "here's a link: https://www.google.com", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link:https://www.google.com/", shouldMatch: true, strs: []string{"https://www.google.com"}},
 					{text: "here's a link: ttps://www.google.com/", shouldMatch: false},
-					{text: "here's a link: httpswwwgooglecom/my/search/query", shouldMatch: true, toks: []string{"httpswwwgooglecom"}},
+					{text: "here's a link: httpswwwgooglecom/my/search/query", shouldMatch: true, strs: []string{"httpswwwgooglecom"}},
 				},
 			},
 			{
@@ -340,9 +340,9 @@ func TestEvalExprToRPN(t *testing.T) {
 				in:  "((hi?the***re))",
 				out: "hi?the*re/r",
 				evalRPN: []testEvalEntry{
-					{text: "hi there", shouldMatch: true, toks: []string{"hi there"}},
-					{text: "hithere hi theere", shouldMatch: true, toks: []string{"hi theere", "hithere"}},
-					{text: "hithe /:-D/ re", shouldMatch: true, toks: []string{"hithe /:-D/ re"}},
+					{text: "hi there", shouldMatch: true, strs: []string{"hi there"}},
+					{text: "hithere hi theere", shouldMatch: true, strs: []string{"hi theere", "hithere"}},
+					{text: "hithe /:-D/ re", shouldMatch: true, strs: []string{"hithe /:-D/ re"}},
 					{text: "hii there", shouldMatch: false},
 				},
 			},
@@ -359,7 +359,7 @@ func TestEvalExprToRPN(t *testing.T) {
 				out: "hi?the*re/r,*a?/r,+",
 				evalRPN: []testEvalEntry{
 					{text: "??? hi the huh here's some interrupting text are", shouldMatch: true,
-						toks: []string{"hi the huh here", "??? hi the huh here's some interrupting text ar"}},
+						strs: []string{"hi the huh here", "??? hi the huh here's some interrupting text ar"}},
 				},
 			},
 		}
@@ -497,8 +497,8 @@ func testEvalHelper(t *testing.T, i int, entry testEntry) {
 				t.Errorf("test #%d:%d should have err=nil, but err=%s", i+1, j+1, err.Error())
 			} else if res.Match != evalEntry.shouldMatch {
 				t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.shouldMatch, res.Match)
-			} else if !testUnorderedSliceEq(res.Strings, evalEntry.toks) {
-				t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.toks, res.Strings)
+			} else if !testUnorderedSliceEq(res.Strings, evalEntry.strs) {
+				t.Errorf("test #%d:%d should have res=%v, but res=%v", i+1, j+1, evalEntry.strs, res.Strings)
 			}
 		}
 
