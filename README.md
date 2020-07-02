@@ -32,3 +32,35 @@ These tokens are arranged in Reverse Polish notation, and are then evaluated int
 
 Rematch is only partially dependent on Go's Regexp package for matching word tokens with wildcards.
 It does not transpile an expression from Rematch into Regex as Go's Regex flavor does not support lookaheads and non-order dependent word matching.
+
+## Getting Started
+
+### Installing
+
+You can get the latest release of Rematch by using:
+
+```
+go get github.com/pixeltopic/rematch
+```
+
+```go
+import "github.com/pixeltopic/rematch"
+```
+
+### Usage
+
+```go
+matched, _ := rematch.EvalRawExpr("cow+jumped", "The cow jumped over the moon.")
+fmt.Println(matched)
+```
+
+## License
+
+This project is licensed under the [BSD 3-Clause License](https://github.com/pixeltopic/rematch/blob/master/LICENSE)
+
+## Acknowledgments
+
+These resources were invaluable for the implementation of Rematch.
+
+- https://en.wikipedia.org/wiki/Shunting-yard_algorithm
+- https://www.youtube.com/watch?v=Jd71l0cHZL0
