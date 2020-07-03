@@ -30,6 +30,7 @@ func TestSet(t *testing.T) {
 		}
 
 		set.Remove("foo")
+		set.Remove("bar") // silently no-ops
 
 		ok = set.Add("foo")
 
