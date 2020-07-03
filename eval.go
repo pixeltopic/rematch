@@ -72,24 +72,42 @@ func tokenizeExpr(expr string) ([]string, error) {
 	var (
 		tokens []string
 		token  strings.Builder
-		adjAst bool
+		adjAst bool //adjacent to asterisk wildcard
+		adjWs  bool // adjacent to whitespace wildcard
 	)
 
 	flushWordTok := func() error {
-		if token.Len() != 0 {
-			switch tokStr := token.String(); tokStr {
-			case string(OPWILDCARDAST):
-				return SyntaxError("invalid word; cannot be lone asterisk wildcard")
-			case string(OPWILDCARDQUEST):
-				return SyntaxError("invalid word; cannot be lone question wildcard")
-			default:
-				if strings.Contains(tokStr, string(OPWILDCARDAST)) || strings.Contains(tokStr, string(OPWILDCARDQUEST)) {
-					tokStr = tokStr + REGEX
+		if token.Len() != 0 { // no op if token is of length 0, since we flush at the end of tokenization as safety
+
+			tokStr := token.String()
+			var valid bool
+
+		WildcardCheck:
+			for i := 0; i < token.Len(); i++ {
+				switch tokStr[i] {
+				case OPWHITESPACE:
+				case OPWILDCARDAST:
+				case OPWILDCARDQUEST:
+				default:
+					valid = true
+					break WildcardCheck
 				}
-				tokens = append(tokens, tokStr)
-				token.Reset()
 			}
+
+			if !valid {
+				return SyntaxError("invalid word; cannot be only contain wildcards")
+			}
+
+			if strings.Contains(tokStr, string(OPWILDCARDAST)) ||
+				strings.Contains(tokStr, string(OPWILDCARDQUEST)) ||
+				strings.Contains(tokStr, string(OPWHITESPACE)) {
+				tokStr = tokStr + REGEX
+			}
+			tokens = append(tokens, tokStr)
+			token.Reset()
+
 		}
+
 		return nil
 	}
 
@@ -108,21 +126,28 @@ func tokenizeExpr(expr string) ([]string, error) {
 				return nil, err
 			}
 			tokens = append(tokens, string(char))
-			adjAst = false
+			adjAst, adjWs = false, false
 		case OPWILDCARDAST:
 			if !adjAst {
 				token.WriteRune(char)
 				adjAst = true
 			}
+			adjWs = false
 		case OPWILDCARDQUEST:
 			token.WriteRune(char)
+			adjAst, adjWs = false, false
+		case OPWHITESPACE:
+			if !adjWs {
+				token.WriteRune(char)
+				adjWs = true
+			}
 			adjAst = false
 		default:
 			if !allowedWordChars(char) {
 				return nil, SyntaxError("invalid char in word; must be alphanumeric")
 			}
 			token.WriteRune(char)
-			adjAst = false
+			adjAst, adjWs = false, false
 		}
 	}
 	if err := flushWordTok(); err != nil {
@@ -134,7 +159,7 @@ func tokenizeExpr(expr string) ([]string, error) {
 
 // negateToks tracks whether a token (word or pattern) should be negated in the find output.
 // parens are not accounted for because they are not included in RPN form.
-// nor are * and ? operators handled because they exist as part of patterns.
+// nor are and of the wildcard operator variants handled because they exist as part of patterns.
 func negateToks(min int, rpnTokens []token) {
 	for i := min; i < len(rpnTokens); i++ {
 		switch rpnTokens[i].Tok {
@@ -353,6 +378,7 @@ func replaceIfRegex(tok string) (parsed string, isRegex bool) {
 
 		parsed = strings.ReplaceAll(parsed, string(OPWILDCARDQUEST), ".?")
 		parsed = strings.ReplaceAll(parsed, string(OPWILDCARDAST), ".*?")
+		parsed = strings.ReplaceAll(parsed, string(OPWHITESPACE), "[\\s]*?")
 
 		return parsed, true
 	}

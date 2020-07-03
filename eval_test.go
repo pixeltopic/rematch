@@ -306,6 +306,44 @@ func TestEvalExprToRPN(t *testing.T) {
 	t.Run("valid regex expressions with negations", func(t *testing.T) {
 		entries := []testEntry{
 			{
+				in:  "*pattern*",
+				out: "*pattern*/r",
+				evalRPN: []testEvalEntry{
+					{text: "pppatternn", shouldMatch: true, strs: []string{"pppattern"}},
+				},
+			},
+			{
+				in:  "!*pat?tern*",
+				out: "*pat?tern*/r,!",
+				evalRPN: []testEvalEntry{
+					{text: "pppatternn", shouldMatch: false},
+				},
+			},
+			{
+				in:  "pat_tern",
+				out: "pat_tern/r",
+				evalRPN: []testEvalEntry{
+					{text: "pppatternn", shouldMatch: true, strs: []string{"pattern"}},
+					{text: "pppat ternn", shouldMatch: true, strs: []string{"pat tern"}},
+					{text: "pppat     ternn", shouldMatch: true, strs: []string{"pat     tern"}},
+					{text: "pppat \tternn", shouldMatch: true, strs: []string{"pat \ttern"}},
+					{text: "pppat teernn", shouldMatch: false},
+					{text: "pppattternn", shouldMatch: false},
+				},
+			},
+			{
+				in:  "pat_____tern",
+				out: "pat_tern/r",
+				evalRPN: []testEvalEntry{
+					{text: "pppatternn", shouldMatch: true, strs: []string{"pattern"}},
+					{text: "pppat ternn", shouldMatch: true, strs: []string{"pat tern"}},
+					{text: "pppat     ternn", shouldMatch: true, strs: []string{"pat     tern"}},
+					{text: "pppat \tternn", shouldMatch: true, strs: []string{"pat \ttern"}},
+					{text: "pppat teernn", shouldMatch: false},
+					{text: "pppattternn", shouldMatch: false},
+				},
+			},
+			{
 				in:  "hi|hi|hi+hi+hi|hi+*hi",
 				out: "hi,hi,|,hi,|,hi,+,hi,+,hi,|,*hi/r,+",
 				evalRPN: []testEvalEntry{
@@ -374,8 +412,7 @@ func TestEvalExprToRPN(t *testing.T) {
 		const (
 			// tokenization errors
 			wordErr  = SyntaxError("invalid char in word; must be alphanumeric")
-			wordErr2 = SyntaxError("invalid word; cannot be lone asterisk wildcard")
-			wordErr3 = SyntaxError("invalid word; cannot be lone question wildcard")
+			wordErr2 = SyntaxError("invalid word; cannot be only contain wildcards")
 
 			// shunting errors
 			opErr     = SyntaxError("unexpected operator at end of expression, want operand")
@@ -394,9 +431,15 @@ func TestEvalExprToRPN(t *testing.T) {
 			{in: "((dog+(hotate|TETAHO&))|(g*D+(Xpotato|yubiyubi)))", err: wordErr},
 			{in: "hey there", err: wordErr},
 			{in: "one|two+three tree", err: wordErr},
+			{in: "one|two+three&^%tree", err: wordErr},
+			{in: "\\two+thret``=ree", err: wordErr},
 			{in: "(**)", err: wordErr2},
 			{in: "***", err: wordErr2},
-			{in: "?", err: wordErr3},
+			{in: "_", err: wordErr2},
+			{in: "___", err: wordErr2},
+			{in: "?", err: wordErr2},
+			{in: "??", err: wordErr2},
+			{in: "*_?*?", err: wordErr2},
 
 			// the following tests occur during shunting.
 			{in: "", err: opErr},
