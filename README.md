@@ -1,6 +1,6 @@
 # Rematch
 
-Rematch is a basic, stripped down query language that matches against strings.
+Rematch is a basic, stripped down query language that performs order-independent matching against strings.
 
 A Rematch expression is composed of alphanumeric, case sensitive words & patterns to be matched against an arbitrary string. This matching occurs in linear time.
 
@@ -12,16 +12,15 @@ A "pattern" is simply a string with wildcard operators present.
 - Unlike a word, it is matched against the _entire_ string rather than word tokens.
 - This can allow matching more complex patterns such as URLs or words that may have punctuation or other non-alphanumeric characters present.
 
-Rematch expressions do not support non-alphanumeric characters and whitespaces. Whitespace matching can be "simulated" by wildcards, though it will also pick up non-whitespace matches as of currently.
-Whitespace support could be implemented in the future via the addition of a special operator which behaves similarly to wildcards but only detects whitespaces.
-
-For example, implementing an `_` operator for queries that gets converted into `[\s]+?` regex when matching.
+Rematch expressions do not support non-alphanumeric characters.
+Whitespaces have limited support.
 
 Rematch supports the following grammar:
 - `|` OR operator, used between words. (This word OR this word must be present in any order)
 - `+` AND operator, used between words. (This word AND this word must be present in any order)
 - `*` wildcard (0 to n). When evaluating, `*` gets converted into a lazy match wildcard in regex: `.*?`.
 - `?` wildcard (0 to 1). When evaluating, `?` gets converted into a regex `.?`.
+- `_` whitespace wildcard (0 to n). When evaluating, `_` gets converted into a lazy whitespace match in regex: `[\\s]*?`.
 - `()` grouping
 - `!` NOT operator, used before words. Use this with caution, as you may end up with broad query matches.
 - words must be alphanumeric; no whitespaces. Can be modified by wildcards.
