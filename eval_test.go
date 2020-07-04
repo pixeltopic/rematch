@@ -307,21 +307,21 @@ func TestEvalExprToRPN(t *testing.T) {
 		entries := []testEntry{
 			{
 				in:  "*pattern*",
-				out: "*pattern*/r",
+				out: "*pattern*",
 				evalRPN: []testEvalEntry{
 					{text: "pppatternn", shouldMatch: true, strs: []string{"pppattern"}},
 				},
 			},
 			{
 				in:  "!*pat?tern*",
-				out: "*pat?tern*/r,!",
+				out: "*pat?tern*,!",
 				evalRPN: []testEvalEntry{
 					{text: "pppatternn", shouldMatch: false},
 				},
 			},
 			{
 				in:  "pat_tern",
-				out: "pat_tern/r",
+				out: "pat_tern",
 				evalRPN: []testEvalEntry{
 					{text: "pppatternn", shouldMatch: true, strs: []string{"pattern"}},
 					{text: "pppat ternn", shouldMatch: true, strs: []string{"pat tern"}},
@@ -333,7 +333,7 @@ func TestEvalExprToRPN(t *testing.T) {
 			},
 			{
 				in:  "pat_____tern",
-				out: "pat_tern/r",
+				out: "pat_tern",
 				evalRPN: []testEvalEntry{
 					{text: "pppatternn", shouldMatch: true, strs: []string{"pattern"}},
 					{text: "pppat ternn", shouldMatch: true, strs: []string{"pat tern"}},
@@ -345,7 +345,7 @@ func TestEvalExprToRPN(t *testing.T) {
 			},
 			{
 				in:  "hi|hi|hi+hi+hi|hi+*hi",
-				out: "hi,hi,|,hi,|,hi,+,hi,+,hi,|,*hi/r,+",
+				out: "hi,hi,|,hi,|,hi,+,hi,+,hi,|,*hi,+",
 				evalRPN: []testEvalEntry{
 					{text: "hi", shouldMatch: true, strs: []string{"hi", "hi", "hi", "hi", "hi", "hi", "hi"}},
 					{text: "hhi", shouldMatch: false},
@@ -355,7 +355,7 @@ func TestEvalExprToRPN(t *testing.T) {
 			},
 			{
 				in:  "https???www?google?com***",
-				out: "https???www?google?com*/r",
+				out: "https???www?google?com*",
 				evalRPN: []testEvalEntry{
 					{text: "https", shouldMatch: false},
 					{text: "here's a link: https://www.google.com", shouldMatch: true, strs: []string{"https://www.google.com"}},
@@ -365,8 +365,22 @@ func TestEvalExprToRPN(t *testing.T) {
 				},
 			},
 			{
+				in:  "https???www?google?com___",
+				out: "https???www?google?com_",
+				evalRPN: []testEvalEntry{
+					{text: "https", shouldMatch: false},
+					{text: "here's a link: https://www.google.com", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link: https://www.google.com ", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link: https://www.google.com\t", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link: https://www.google.com , Please enjoy.", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link:https://www.google.com/", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link: ttps://www.google.com/", shouldMatch: false},
+					{text: "here's a link: httpswwwgooglecom/my/search/query", shouldMatch: true, strs: []string{"httpswwwgooglecom"}},
+				},
+			},
+			{
 				in:  "!((hi?the***re))",
-				out: "hi?the*re/r,!",
+				out: "hi?the*re,!",
 				evalRPN: []testEvalEntry{
 					{text: "well hi there here's some lorem ipsum text", shouldMatch: false},
 					{text: "hithere", shouldMatch: false},
@@ -376,7 +390,7 @@ func TestEvalExprToRPN(t *testing.T) {
 			},
 			{
 				in:  "((hi?the***re))",
-				out: "hi?the*re/r",
+				out: "hi?the*re",
 				evalRPN: []testEvalEntry{
 					{text: "hi there", shouldMatch: true, strs: []string{"hi there"}},
 					{text: "hithere hi theere", shouldMatch: true, strs: []string{"hi theere", "hithere"}},
@@ -386,15 +400,15 @@ func TestEvalExprToRPN(t *testing.T) {
 			},
 			{
 				in:  "((hi?the***re+*howdy?))",
-				out: "hi?the*re/r,*howdy?/r,+",
+				out: "hi?the*re,*howdy?,+",
 			},
 			{
 				in:  "((dog+(hotate|TETAHO))|(g*D+(Xpotato|yubiyubi)))",
-				out: "dog,hotate,TETAHO,|,+,g*D/r,Xpotato,yubiyubi,|,+,|",
+				out: "dog,hotate,TETAHO,|,+,g*D,Xpotato,yubiyubi,|,+,|",
 			},
 			{
 				in:  "((hi?the***re+*a?))",
-				out: "hi?the*re/r,*a?/r,+",
+				out: "hi?the*re,*a?,+",
 				evalRPN: []testEvalEntry{
 					{text: "??? hi the huh here's some interrupting text are", shouldMatch: true,
 						strs: []string{"hi the huh here", "??? hi the huh here's some interrupting text ar"}},
