@@ -10,16 +10,17 @@ import (
 
 // expression operators
 const (
-	OPAND           = '+'
-	OPOR            = '|'
-	OPGROUPL        = '('
-	OPGROUPR        = ')'
-	OPWILDCARDAST   = '*'
-	OPWILDCARDQUEST = '?'
-	OPNEGATE        = '!'
-	OPWHITESPACE    = '_'
+	opAnd          = '+'
+	opOr           = '|'
+	opGroupL       = '('
+	opGroupR       = ')'
+	opWildcardAst  = '*'
+	opWildcardQstn = '?'
+	opNot          = '!'
+	opWildcardSpce = '_'
 
-	REGEX = "/r"
+	// suffix identifier for regex contained tokens
+	regexID = "/r"
 )
 
 // SyntaxError occurs when an expression is malformed.
@@ -40,7 +41,7 @@ func (e EvalError) Error() string {
 // It contains the token itself (which may be a word, pattern, or operator)
 // and if it is a word or pattern, whether it will be negated when building subresults.
 type token struct {
-	Tok    string `json:"s"`
+	Str    string `json:"s"`
 	Negate bool   `json:"!,omitempty"` // negate match result in the subresult during RPN step
 }
 
@@ -85,9 +86,9 @@ func tokenizeExpr(expr string) ([]string, error) {
 		WildcardCheck:
 			for i := 0; i < token.Len(); i++ {
 				switch tokStr[i] {
-				case OPWHITESPACE:
-				case OPWILDCARDAST:
-				case OPWILDCARDQUEST:
+				case opWildcardSpce:
+				case opWildcardAst:
+				case opWildcardQstn:
 				default:
 					valid = true
 					break WildcardCheck
@@ -98,10 +99,10 @@ func tokenizeExpr(expr string) ([]string, error) {
 				return SyntaxError("invalid word; cannot only contain wildcards")
 			}
 
-			if strings.Contains(tokStr, string(OPWILDCARDAST)) ||
-				strings.Contains(tokStr, string(OPWILDCARDQUEST)) ||
-				strings.Contains(tokStr, string(OPWHITESPACE)) {
-				tokStr = tokStr + REGEX
+			if strings.Contains(tokStr, string(opWildcardAst)) ||
+				strings.Contains(tokStr, string(opWildcardQstn)) ||
+				strings.Contains(tokStr, string(opWildcardSpce)) {
+				tokStr = tokStr + regexID
 			}
 			tokens = append(tokens, tokStr)
 			token.Reset()
@@ -113,30 +114,30 @@ func tokenizeExpr(expr string) ([]string, error) {
 
 	for i := 0; i < len(expr); i++ {
 		switch char := rune(expr[i]); char {
-		case OPGROUPL:
+		case opGroupL:
 			fallthrough
-		case OPGROUPR:
+		case opGroupR:
 			fallthrough
-		case OPNEGATE:
+		case opNot:
 			fallthrough
-		case OPAND:
+		case opAnd:
 			fallthrough
-		case OPOR:
+		case opOr:
 			if err := flushWordTok(); err != nil {
 				return nil, err
 			}
 			tokens = append(tokens, string(char))
 			adjAst, adjWs = false, false
-		case OPWILDCARDAST:
+		case opWildcardAst:
 			if !adjAst {
 				token.WriteRune(char)
 				adjAst = true
 			}
 			adjWs = false
-		case OPWILDCARDQUEST:
+		case opWildcardQstn:
 			token.WriteRune(char)
 			adjAst, adjWs = false, false
-		case OPWHITESPACE:
+		case opWildcardSpce:
 			if !adjWs {
 				token.WriteRune(char)
 				adjWs = true
@@ -162,10 +163,10 @@ func tokenizeExpr(expr string) ([]string, error) {
 // nor are and of the wildcard operator variants handled because they exist as part of patterns.
 func negateToks(min int, rpnTokens []token) {
 	for i := min; i < len(rpnTokens); i++ {
-		switch rpnTokens[i].Tok {
-		case string(OPNEGATE):
-		case string(OPAND):
-		case string(OPOR):
+		switch rpnTokens[i].Str {
+		case string(opNot):
+		case string(opAnd):
+		case string(opOr):
 		default:
 			rpnTokens[i].Negate = !rpnTokens[i].Negate
 		}
@@ -191,7 +192,7 @@ func shuntingYard(tokens []string) ([]token, error) {
 	)
 
 	identifyNegatedToks := func(op string) {
-		if op == string(OPNEGATE) {
+		if op == string(opNot) {
 			for _, l := range lookbacks {
 				negateToks(l, rpnTokens)
 			}
@@ -201,11 +202,11 @@ func shuntingYard(tokens []string) ([]token, error) {
 
 	for _, tok := range tokens {
 		switch tok {
-		case string(OPAND):
+		case string(opAnd):
 			// AND and OR infix operators have EQUAL precendence, meaning the expression will be evaluated from left to right during absence of groups.
 			// ambiguity can be reduced by using parens
 			fallthrough
-		case string(OPOR):
+		case string(opOr):
 			/*
 				while ((there is a operator at the top of the operator stack) and (the operator at the top of the operator stack is not a left parenthesis)):
 					pop operators from the operator stack onto the output queue.
@@ -214,29 +215,29 @@ func shuntingYard(tokens []string) ([]token, error) {
 			if state != expectOperator {
 				return nil, SyntaxError("unexpected infix operator, want operand")
 			}
-			for opStack.Len() > 0 && opStack.Peek() != string(OPGROUPL) {
+			for opStack.Len() > 0 && opStack.Peek() != string(opGroupL) {
 				op := opStack.Pop().(string)
 
 				identifyNegatedToks(op)
 
-				rpnTokens = append(rpnTokens, token{Tok: op})
+				rpnTokens = append(rpnTokens, token{Str: op})
 			}
 			opStack.Push(tok)
 			state = expectOperand
-		case string(OPNEGATE):
+		case string(opNot):
 			if state != expectOperand {
 				return nil, SyntaxError("unexpected negation")
 			}
 			opStack.Push(tok)
 			lookbacks = append(lookbacks, len(rpnTokens))
 			state = expectOperand
-		case string(OPGROUPL):
+		case string(opGroupL):
 			if state != expectOperand {
 				return nil, SyntaxError("unexpected left parenthesis")
 			}
 			opStack.Push(tok)
 			state = expectOperand
-		case string(OPGROUPR):
+		case string(opGroupR):
 			if state != expectOperator {
 				return nil, SyntaxError("unexpected right parenthesis")
 			}
@@ -246,7 +247,7 @@ func shuntingYard(tokens []string) ([]token, error) {
 			// while the operator at the top of the operator stack is not a left parenthesis:
 			//   pop the operator from the operator stack onto the output queue.
 			for opStack.Len() > 0 {
-				if opStack.Peek() == string(OPGROUPL) {
+				if opStack.Peek() == string(opGroupL) {
 					lParenWasFound = true
 
 					// if there is a left parenthesis at the top of the operator stack, then:
@@ -258,7 +259,7 @@ func shuntingYard(tokens []string) ([]token, error) {
 
 				identifyNegatedToks(op)
 
-				rpnTokens = append(rpnTokens, token{Tok: op})
+				rpnTokens = append(rpnTokens, token{Str: op})
 			}
 			// If the stack runs out without finding a left parenthesis, then there are mismatched parentheses.
 			if !lParenWasFound {
@@ -272,7 +273,7 @@ func shuntingYard(tokens []string) ([]token, error) {
 			}
 			// the token is not an operator; but a word.
 			// append /r to end of tok if regex
-			rpnTokens = append(rpnTokens, token{Tok: tok})
+			rpnTokens = append(rpnTokens, token{Str: tok})
 			state = expectOperator
 		}
 	}
@@ -285,15 +286,15 @@ func shuntingYard(tokens []string) ([]token, error) {
 	for opStack.Len() > 0 {
 		op := opStack.Pop().(string)
 		switch op {
-		case string(OPGROUPL):
+		case string(opGroupL):
 			fallthrough
-		case string(OPGROUPR):
+		case string(opGroupR):
 			return nil, SyntaxError("mismatched parenthesis at end of expression")
-		case string(OPNEGATE):
+		case string(opNot):
 			identifyNegatedToks(op)
 		}
 
-		rpnTokens = append(rpnTokens, token{Tok: op})
+		rpnTokens = append(rpnTokens, token{Str: op})
 	}
 
 	return rpnTokens, nil
@@ -305,22 +306,22 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 	auxResult := map[string]*subresult{} // mapping of word or pattern keys to results.
 
 	for _, tok := range rpnTokens {
-		switch str := tok.Tok; str {
-		case string(OPNEGATE):
+		switch str := tok.Str; str {
+		case string(opNot):
 			if argStack.Len() < 1 {
 				return nil, EvalError("less than 1 argument in stack; likely syntax error in RPN")
 			}
 			argStack.Push(!argStack.Pop().(bool))
-		case string(OPAND):
+		case string(opAnd):
 			fallthrough
-		case string(OPOR):
+		case string(opOr):
 			if argStack.Len() < 2 {
 				return nil, EvalError("less than 2 arguments in stack; likely syntax error in RPN")
 			}
 			a, b := argStack.Pop().(bool), argStack.Pop().(bool)
 
 			switch str {
-			case string(OPAND):
+			case string(opAnd):
 				argStack.Push(a && b)
 			default:
 				argStack.Push(a || b)
@@ -374,11 +375,11 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 }
 
 func replaceIfRegex(tok string) (parsed string, isRegex bool) {
-	if parsed := strings.TrimSuffix(tok, REGEX); parsed != tok {
+	if parsed := strings.TrimSuffix(tok, regexID); parsed != tok {
 
-		parsed = strings.ReplaceAll(parsed, string(OPWILDCARDQUEST), ".?")
-		parsed = strings.ReplaceAll(parsed, string(OPWILDCARDAST), ".*?")
-		parsed = strings.ReplaceAll(parsed, string(OPWHITESPACE), "[\\s]*?")
+		parsed = strings.ReplaceAll(parsed, string(opWildcardQstn), ".?")
+		parsed = strings.ReplaceAll(parsed, string(opWildcardAst), ".*?")
+		parsed = strings.ReplaceAll(parsed, string(opWildcardSpce), "[\\s]*?")
 
 		return parsed, true
 	}

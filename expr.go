@@ -8,7 +8,7 @@ import (
 func tokensToStrs(toks []token) []string {
 	var s []string
 	for _, t := range toks {
-		s = append(s, t.Tok)
+		s = append(s, t.Str)
 	}
 	return s
 }
@@ -16,7 +16,7 @@ func tokensToStrs(toks []token) []string {
 func strsToTokens(strs []string) []token {
 	var t []token
 	for _, s := range strs {
-		t = append(t, token{Tok: s, Negate: false})
+		t = append(t, token{Str: s, Negate: false})
 	}
 	return t
 }
