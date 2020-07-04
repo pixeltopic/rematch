@@ -412,7 +412,7 @@ func TestEvalExprToRPN(t *testing.T) {
 		const (
 			// tokenization errors
 			wordErr  = SyntaxError("invalid char in word; must be alphanumeric")
-			wordErr2 = SyntaxError("invalid word; cannot be only contain wildcards")
+			wordErr2 = SyntaxError("invalid word; cannot only contain wildcards")
 
 			// shunting errors
 			opErr     = SyntaxError("unexpected operator at end of expression, want operand")

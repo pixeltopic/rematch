@@ -95,7 +95,7 @@ func tokenizeExpr(expr string) ([]string, error) {
 			}
 
 			if !valid {
-				return SyntaxError("invalid word; cannot be only contain wildcards")
+				return SyntaxError("invalid word; cannot only contain wildcards")
 			}
 
 			if strings.Contains(tokStr, string(OPWILDCARDAST)) ||
