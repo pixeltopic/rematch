@@ -85,8 +85,11 @@ func tokenizeExpr(expr string) ([]token, error) {
 			for i := 0; i < len(tokStr); i++ {
 				switch tokStr[i] {
 				case opWildcardSpce:
+					fallthrough
 				case opWildcardAst:
+					fallthrough
 				case opWildcardQstn:
+					isRegex = true
 				default:
 					valid = true
 					break WildcardCheck
@@ -97,11 +100,14 @@ func tokenizeExpr(expr string) ([]token, error) {
 				return SyntaxError("invalid word; cannot only contain wildcards")
 			}
 
-			if strings.Contains(tokStr, string(opWildcardAst)) ||
-				strings.Contains(tokStr, string(opWildcardQstn)) ||
-				strings.Contains(tokStr, string(opWildcardSpce)) {
+			// only do a check if isRegex is not already true in case the WildcardCheck loop terminates early
+			if !isRegex &&
+				(strings.Contains(tokStr, string(opWildcardAst)) ||
+					strings.Contains(tokStr, string(opWildcardQstn)) ||
+					strings.Contains(tokStr, string(opWildcardSpce))) {
 				isRegex = true
 			}
+
 			tokens = append(tokens, token{Str: tokStr, Regex: isRegex})
 			word.Reset()
 
