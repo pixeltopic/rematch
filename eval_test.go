@@ -354,13 +354,28 @@ func TestEvalExprToRPN(t *testing.T) {
 				},
 			},
 			{
-				in:  "https???www?google?com***",
+				in:  "https???www?google?com",
+				out: "https???www?google?com",
+				evalRPN: []testEvalEntry{
+					{text: "https", shouldMatch: false},
+					{text: "here's a link: https://www.google.com", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link:https://www.google.com/", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link: ttps://www.google.com/", shouldMatch: false},
+					{text: "here's a link: https://www.google..com/", shouldMatch: false},
+					{text: "here's a link: https@www.google/com/", shouldMatch: true, strs: []string{"https@www.google/com"}},
+					{text: "here's a link: httpswwwgooglecom/my/search/query", shouldMatch: true, strs: []string{"httpswwwgooglecom"}},
+				},
+			},
+			{
+				in:  "https???www?google?com***", // appending wildcards to the end of a pattern does not change the output.
 				out: "https???www?google?com*",
 				evalRPN: []testEvalEntry{
 					{text: "https", shouldMatch: false},
 					{text: "here's a link: https://www.google.com", shouldMatch: true, strs: []string{"https://www.google.com"}},
 					{text: "here's a link:https://www.google.com/", shouldMatch: true, strs: []string{"https://www.google.com"}},
 					{text: "here's a link: ttps://www.google.com/", shouldMatch: false},
+					{text: "here's a link: https://www.google..com/", shouldMatch: false},
+					{text: "here's a link: https@www.google/com/", shouldMatch: true, strs: []string{"https@www.google/com"}},
 					{text: "here's a link: httpswwwgooglecom/my/search/query", shouldMatch: true, strs: []string{"httpswwwgooglecom"}},
 				},
 			},
