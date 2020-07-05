@@ -1,6 +1,7 @@
 package rematch
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -34,13 +35,59 @@ func (e EvalError) Error() string {
 	return fmt.Sprintf("EvalError:%s", string(e))
 }
 
-// token represents a piece of the output produced by the Shunting-yard algorithm.
-// It contains the token itself (which may be a word, pattern, or operator)
-// and if it is a word or pattern, whether it will be negated when building subresults.
-type token struct {
-	Str    string `json:"s"`
-	Negate bool   `json:"!,omitempty"` // negate match result in the subresult during RPN step
-	Regex  bool   `json:"r,omitempty"`
+type (
+	// token represents a piece of the output produced by the Shunting-yard algorithm.
+	// It contains the token itself (which may be a word, pattern, or operator)
+	// and if it is a word or pattern, whether it will be negated when building subresults.
+	token struct {
+		Str    string `json:"s"`
+		Negate bool   `json:"-"` // negate match result in the subresult during RPN step
+		Regex  bool   `json:"-"`
+	}
+
+	// tokenJSON is an auxiliary type for marshalling into a more compact JSON string
+	tokenJSON struct {
+		*tokenAlias
+		Negate int `json:"!,omitempty"`
+		Regex  int `json:"r,omitempty"`
+	}
+
+	// tokenAlias is an auxiliary type for aliasing (removing the token unmarshal so stack will not overflow)
+	tokenAlias token
+)
+
+// MarshalJSON implements JSON marshalling
+func (t token) MarshalJSON() ([]byte, error) {
+
+	tokJSON := tokenJSON{
+		tokenAlias: (*tokenAlias)(&t),
+	}
+
+	if t.Negate {
+		tokJSON.Negate = 1
+	}
+
+	if t.Regex {
+		tokJSON.Regex = 1
+	}
+
+	return json.Marshal(tokJSON)
+}
+
+// UnmarshalJSON implements JSON unmarshalling
+func (t *token) UnmarshalJSON(data []byte) error {
+	aux := tokenJSON{
+		tokenAlias: (*tokenAlias)(t),
+	}
+	err := json.Unmarshal(data, &aux)
+	if err != nil {
+		return err
+	}
+
+	t.Negate = aux.Negate == 1
+	t.Regex = aux.Regex == 1
+
+	return nil
 }
 
 // subresult is an intermediary struct for tracking whether a collection of matching strings should be returned

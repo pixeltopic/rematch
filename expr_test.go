@@ -24,7 +24,7 @@ func TestExpr(t *testing.T) {
 			{
 				raw:          "!tasty__|delish",
 				expectedRPN:  "tasty_,!,delish,|",
-				expectedJSON: `{"raw":"!tasty|delish","rpn":[{"s":"tasty","!":true,"r":true},{"s":"!"},{"s":"delish"},{"s":"|"}],"compiled":true}`,
+				expectedJSON: `{"raw":"!tasty|delish","rpn":[{"s":"tasty","!":1,"r":1},{"s":"!"},{"s":"delish"},{"s":"|"}],"compiled":true}`,
 				evalRPN:      []testEvalEntry{},
 			},
 			{
@@ -41,7 +41,7 @@ func TestExpr(t *testing.T) {
 			{
 				raw:          "((((ch?ips))))|(fish***+(((tasty))))",
 				expectedRPN:  "ch?ips,fish*,tasty,+,|",
-				expectedJSON: `{"raw":"((((ch?ips))))|(fish***+(((tasty))))","rpn":[{"s":"ch?ips","r":true},{"s":"fish*","r":true},{"s":"tasty"},{"s":"+"},{"s":"|"}],"compiled":true}`,
+				expectedJSON: `{"raw":"((((ch?ips))))|(fish***+(((tasty))))","rpn":[{"s":"ch?ips","r":1},{"s":"fish*","r":1},{"s":"tasty"},{"s":"+"},{"s":"|"}],"compiled":true}`,
 				evalRPN: []testEvalEntry{
 					{text: "chips fish tasty", shouldMatch: true, strs: []string{"fish", "tasty", "chips"}}, // "fish tasty" is not a returned match because of regex behavior
 					{text: "fish tasty", shouldMatch: true, strs: []string{"fish", "tasty"}},
