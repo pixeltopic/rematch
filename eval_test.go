@@ -332,6 +332,21 @@ func TestEvalExprToRPN(t *testing.T) {
 				},
 			},
 			{
+				in:  "pat_**_?___?_**_tern", // anything between `pat` and `tern` will result in a true evaluation, but if those 2 substrs are not present in order then will fail
+				out: "pat_*_?_?_*_tern",
+				evalRPN: []testEvalEntry{
+					{text: "pppatternn", shouldMatch: true, strs: []string{"pattern"}},
+					{text: "pppat ternn", shouldMatch: true, strs: []string{"pat tern"}},
+					{text: "pppat     ternn", shouldMatch: true, strs: []string{"pat     tern"}},
+					{text: "pppat \tternn", shouldMatch: true, strs: []string{"pat \ttern"}},
+					{text: "tern pat", shouldMatch: false},
+					{text: "pppat teernn", shouldMatch: false},
+					{text: "pppat &*^&(*^(&^(&*^( ;ternn", shouldMatch: true, strs: []string{"pat &*^&(*^(&^(&*^( ;tern"}},
+					{text: "pppat &*^&(*^(&^(&*^( ;terrnn", shouldMatch: false},
+					{text: "pppattternn", shouldMatch: true, strs: []string{"patttern"}},
+				},
+			},
+			{
 				in:  "pat_____tern",
 				out: "pat_tern",
 				evalRPN: []testEvalEntry{
