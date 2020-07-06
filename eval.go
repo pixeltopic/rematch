@@ -425,8 +425,8 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 
 func replaceIfRegex(tok token) string {
 	if tok.Regex {
-		parsed := strings.ReplaceAll(tok.Str, string(opWildcardQstn), ".?")
-		parsed = strings.ReplaceAll(parsed, string(opWildcardAst), ".*?")
+		parsed := strings.ReplaceAll(tok.Str, string(opWildcardQstn), "[\\s\\S]?")
+		parsed = strings.ReplaceAll(parsed, string(opWildcardAst), "[\\s\\S]*?")
 		parsed = strings.ReplaceAll(parsed, string(opWildcardSpce), "[\\s]*?")
 
 		return parsed
