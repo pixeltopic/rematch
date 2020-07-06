@@ -12,18 +12,15 @@ A "pattern" is simply a string with wildcard operators present.
 - Unlike a word, it is matched against the _entire_ string rather than word tokens.
 - This can allow matching more complex patterns such as URLs or words that may have punctuation or other non-alphanumeric characters present.
 
-Rematch expressions do not support non-alphanumeric characters.
-Whitespaces have limited support.
-
 Rematch supports the following grammar:
 - `|` OR operator, used between words. (This word OR this word must be present in any order)
 - `+` AND operator, used between words. (This word AND this word must be present in any order)
 - `*` wildcard (0 to n). When evaluating, `*` gets converted into a lazy match wildcard in regex: `.*?`.
 - `?` wildcard (0 to 1). When evaluating, `?` gets converted into a regex `.?`.
-- `_` whitespace wildcard (0 to n). When evaluating, `_` gets converted into a lazy whitespace match in regex: `[\\s]*?`.
-- `()` grouping
+- `_` whitespace wildcard (0 to n). When evaluating, `_` gets converted into a lazy whitespace match in regex: `[\\s]*?`. Works like an asterisk `*` wildcard, but only captures whitespaces instead of all characters.
+- `()` grouping to override standard operator precedence, which is left to right.
 - `!` NOT operator, used before words. Use this with caution, as you may end up with broad query matches.
-- words must be alphanumeric; no whitespaces. Can be modified by wildcards.
+- Excluding wildcards, words must be alphanumeric; no whitespaces (as it is captured by `_`).
  
 ## Implementation
 Rematch uses the Shunting-yard algorithm to parse a Rematch expression into tokens. 
