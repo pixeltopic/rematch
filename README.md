@@ -15,9 +15,9 @@ A "pattern" is simply a string with wildcard operators present.
 Rematch supports the following grammar:
 - `|` OR operator, used between words. (This word OR this word must be present in any order)
 - `+` AND operator, used between words. (This word AND this word must be present in any order)
-- `*` wildcard (0 to n). When evaluating, `*` gets converted into a lazy match wildcard in regex: `.*?`.
-- `?` wildcard (0 to 1). When evaluating, `?` gets converted into a regex `.?`.
-- `_` whitespace wildcard (0 to n). When evaluating, `_` gets converted into a lazy whitespace match in regex: `[\\s]*?`. Works like an asterisk `*` wildcard, but only captures whitespaces instead of all characters.
+- `*` wildcard (0 to n). When evaluating, `*` gets converted into a lazy match wildcard in regex: `[\s\S]*?`.
+- `?` wildcard (0 to 1). When evaluating, `?` gets converted into a regex `[\s\S]?`.
+- `_` whitespace wildcard (0 to n). When evaluating, `_` gets converted into a lazy whitespace match in regex: `[\s]*?`. Works like an asterisk `*` wildcard, but only captures whitespaces instead of all characters.
 - `()` grouping to override standard operator precedence, which is left to right.
 - `!` NOT operator, used before words. Use this with caution, as you may end up with broad query matches.
 - Excluding wildcards, words must be alphanumeric; no whitespaces (as it is captured by `_`).
@@ -46,9 +46,12 @@ import "github.com/pixeltopic/rematch"
 ### Usage
 
 ```go
-matched, _ := rematch.EvalRawExpr("cow+jumped", "The cow jumped over the moon.")
-fmt.Println(matched)
+// the words "moon" and "cow" must both be present in the string.
+res, _ := rematch.EvalRawExpr("moon+cow", "The cow jumped over the moon.") 
+fmt.Println(res)
 ```
+
+See `/examples` for more.
 
 ## License
 

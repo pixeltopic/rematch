@@ -2,24 +2,7 @@ package rematch
 
 import (
 	"encoding/json"
-	"strings"
 )
-
-func tokensToStrs(toks []token) []string {
-	var s []string
-	for _, t := range toks {
-		s = append(s, t.Str)
-	}
-	return s
-}
-
-func strsToTokens(strs []string) []token {
-	var t []token
-	for _, s := range strs {
-		t = append(t, token{Str: s, Negate: false})
-	}
-	return t
-}
 
 // Expr represents a Rematch expression.
 type Expr struct {
@@ -41,10 +24,13 @@ func (e *Expr) Raw() string {
 	return e.raw
 }
 
-// Rpn returns the expression in Reverse Polish notation, with each token separated by a space.
-// Tokens that have an /r suffix will be compiled into regex during evaluation/matching
-func (e *Expr) Rpn() string {
-	return strings.Join(tokensToStrs(e.rpn), " ")
+// RPN returns the expression in Reverse Polish notation.
+func (e *Expr) RPN() []string {
+	var s []string
+	for i := range e.rpn {
+		s = append(s, e.rpn[i].Str)
+	}
+	return s
 }
 
 // Compiled returns if the expression has been compiled into Reverse Polish notation.
@@ -53,7 +39,7 @@ func (e *Expr) Compiled() bool {
 }
 
 // Compile an expression.
-// A compiled expression will not be recompiled.
+// A compiled expression will not be recompiled. This is useful when reusing an expression multiple times against different texts
 func (e *Expr) Compile() error {
 	if e.compiled {
 		return nil
