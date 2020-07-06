@@ -544,6 +544,22 @@ func TestEvalExprToRPN(t *testing.T) {
 	})
 }
 
+func tokensToStrs(toks []token) []string {
+	var s []string
+	for _, t := range toks {
+		s = append(s, t.Str)
+	}
+	return s
+}
+
+func strsToTokens(strs []string) []token {
+	var t []token
+	for _, s := range strs {
+		t = append(t, token{Str: s})
+	}
+	return t
+}
+
 // testInvalidRPNHelper exists to trigger RPN evaluation errors.
 func testInvalidRPNHelper(t *testing.T, i int, entry testInvalidRPNEntry) {
 	_, err := evalRPN(strsToTokens(strings.Split(entry.in, ",")), NewText(""))
