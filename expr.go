@@ -8,7 +8,7 @@ import (
 func tokensToStrs(toks []token) []string {
 	var s []string
 	for _, t := range toks {
-		s = append(s, t.Tok)
+		s = append(s, t.Str)
 	}
 	return s
 }
@@ -16,7 +16,7 @@ func tokensToStrs(toks []token) []string {
 func strsToTokens(strs []string) []token {
 	var t []token
 	for _, s := range strs {
-		t = append(t, token{Tok: s, Negate: false})
+		t = append(t, token{Str: s, Negate: false})
 	}
 	return t
 }
@@ -73,7 +73,7 @@ func (e *Expr) Compile() error {
 	return nil
 }
 
-type auxExpr struct {
+type exprJSON struct {
 	Raw      string  `json:"raw"`
 	Rpn      []token `json:"rpn"`
 	Compiled bool    `json:"compiled"`
@@ -89,7 +89,7 @@ func (e *Expr) MarshalJSON() ([]byte, error) {
 		rpn = e.rpn
 	}
 
-	return json.Marshal(&auxExpr{
+	return json.Marshal(&exprJSON{
 		Raw:      e.raw,
 		Rpn:      rpn,
 		Compiled: e.compiled,
@@ -98,7 +98,7 @@ func (e *Expr) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements JSON unmarshalling
 func (e *Expr) UnmarshalJSON(data []byte) error {
-	aux := &auxExpr{}
+	aux := &exprJSON{}
 	err := json.Unmarshal(data, aux)
 	if err != nil {
 		return err

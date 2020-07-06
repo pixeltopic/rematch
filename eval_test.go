@@ -306,8 +306,61 @@ func TestEvalExprToRPN(t *testing.T) {
 	t.Run("valid regex expressions with negations", func(t *testing.T) {
 		entries := []testEntry{
 			{
+				in:  "*pattern*",
+				out: "*pattern*",
+				evalRPN: []testEvalEntry{
+					{text: "pppatternn", shouldMatch: true, strs: []string{"pppattern"}},
+				},
+			},
+			{
+				in:  "!*pat?tern*",
+				out: "*pat?tern*,!",
+				evalRPN: []testEvalEntry{
+					{text: "pppatternn", shouldMatch: false},
+				},
+			},
+			{
+				in:  "pat_tern",
+				out: "pat_tern",
+				evalRPN: []testEvalEntry{
+					{text: "pppatternn", shouldMatch: true, strs: []string{"pattern"}},
+					{text: "pppat ternn", shouldMatch: true, strs: []string{"pat tern"}},
+					{text: "pppat     ternn", shouldMatch: true, strs: []string{"pat     tern"}},
+					{text: "pppat \tternn", shouldMatch: true, strs: []string{"pat \ttern"}},
+					{text: "pppat teernn", shouldMatch: false},
+					{text: "pppattternn", shouldMatch: false},
+				},
+			},
+			{
+				in:  "pat_**_?___?_**_tern", // anything between `pat` and `tern` will result in a true evaluation, but if those 2 substrs are not present in order then will fail
+				out: "pat_*_?_?_*_tern",
+				evalRPN: []testEvalEntry{
+					{text: "pppatternn", shouldMatch: true, strs: []string{"pattern"}},
+					{text: "pppat ternn", shouldMatch: true, strs: []string{"pat tern"}},
+					{text: "pppat     ternn", shouldMatch: true, strs: []string{"pat     tern"}},
+					{text: "pppat \tternn", shouldMatch: true, strs: []string{"pat \ttern"}},
+					{text: "tern pat", shouldMatch: false},
+					{text: "pppat teernn", shouldMatch: false},
+					{text: "pppat &*^&(*^(&^(&*^( ;ternn", shouldMatch: true, strs: []string{"pat &*^&(*^(&^(&*^( ;tern"}},
+					{text: "pppat &*^&(*^(&^(&*^( ;terrnn", shouldMatch: false},
+					{text: "pppattternn", shouldMatch: true, strs: []string{"patttern"}},
+				},
+			},
+			{
+				in:  "pat_____tern",
+				out: "pat_tern",
+				evalRPN: []testEvalEntry{
+					{text: "pppatternn", shouldMatch: true, strs: []string{"pattern"}},
+					{text: "pppat ternn", shouldMatch: true, strs: []string{"pat tern"}},
+					{text: "pppat     ternn", shouldMatch: true, strs: []string{"pat     tern"}},
+					{text: "pppat \tternn", shouldMatch: true, strs: []string{"pat \ttern"}},
+					{text: "pppat teernn", shouldMatch: false},
+					{text: "pppattternn", shouldMatch: false},
+				},
+			},
+			{
 				in:  "hi|hi|hi+hi+hi|hi+*hi",
-				out: "hi,hi,|,hi,|,hi,+,hi,+,hi,|,*hi/r,+",
+				out: "hi,hi,|,hi,|,hi,+,hi,+,hi,|,*hi,+",
 				evalRPN: []testEvalEntry{
 					{text: "hi", shouldMatch: true, strs: []string{"hi", "hi", "hi", "hi", "hi", "hi", "hi"}},
 					{text: "hhi", shouldMatch: false},
@@ -316,11 +369,40 @@ func TestEvalExprToRPN(t *testing.T) {
 				},
 			},
 			{
-				in:  "https???www?google?com***",
-				out: "https???www?google?com*/r",
+				in:  "https???www?google?com",
+				out: "https???www?google?com",
 				evalRPN: []testEvalEntry{
 					{text: "https", shouldMatch: false},
 					{text: "here's a link: https://www.google.com", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link:https://www.google.com/", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link: ttps://www.google.com/", shouldMatch: false},
+					{text: "here's a link: https://www.google..com/", shouldMatch: false},
+					{text: "here's a link: https@www.google/com/", shouldMatch: true, strs: []string{"https@www.google/com"}},
+					{text: "here's a link: httpswwwgooglecom/my/search/query", shouldMatch: true, strs: []string{"httpswwwgooglecom"}},
+				},
+			},
+			{
+				in:  "https???www?google?com***", // appending wildcards to the end of a pattern does not change the output.
+				out: "https???www?google?com*",
+				evalRPN: []testEvalEntry{
+					{text: "https", shouldMatch: false},
+					{text: "here's a link: https://www.google.com", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link:https://www.google.com/", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link: ttps://www.google.com/", shouldMatch: false},
+					{text: "here's a link: https://www.google..com/", shouldMatch: false},
+					{text: "here's a link: https@www.google/com/", shouldMatch: true, strs: []string{"https@www.google/com"}},
+					{text: "here's a link: httpswwwgooglecom/my/search/query", shouldMatch: true, strs: []string{"httpswwwgooglecom"}},
+				},
+			},
+			{
+				in:  "https???www?google?com___",
+				out: "https???www?google?com_",
+				evalRPN: []testEvalEntry{
+					{text: "https", shouldMatch: false},
+					{text: "here's a link: https://www.google.com", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link: https://www.google.com ", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link: https://www.google.com\t", shouldMatch: true, strs: []string{"https://www.google.com"}},
+					{text: "here's a link: https://www.google.com , Please enjoy.", shouldMatch: true, strs: []string{"https://www.google.com"}},
 					{text: "here's a link:https://www.google.com/", shouldMatch: true, strs: []string{"https://www.google.com"}},
 					{text: "here's a link: ttps://www.google.com/", shouldMatch: false},
 					{text: "here's a link: httpswwwgooglecom/my/search/query", shouldMatch: true, strs: []string{"httpswwwgooglecom"}},
@@ -328,7 +410,7 @@ func TestEvalExprToRPN(t *testing.T) {
 			},
 			{
 				in:  "!((hi?the***re))",
-				out: "hi?the*re/r,!",
+				out: "hi?the*re,!",
 				evalRPN: []testEvalEntry{
 					{text: "well hi there here's some lorem ipsum text", shouldMatch: false},
 					{text: "hithere", shouldMatch: false},
@@ -338,7 +420,7 @@ func TestEvalExprToRPN(t *testing.T) {
 			},
 			{
 				in:  "((hi?the***re))",
-				out: "hi?the*re/r",
+				out: "hi?the*re",
 				evalRPN: []testEvalEntry{
 					{text: "hi there", shouldMatch: true, strs: []string{"hi there"}},
 					{text: "hithere hi theere", shouldMatch: true, strs: []string{"hi theere", "hithere"}},
@@ -348,15 +430,15 @@ func TestEvalExprToRPN(t *testing.T) {
 			},
 			{
 				in:  "((hi?the***re+*howdy?))",
-				out: "hi?the*re/r,*howdy?/r,+",
+				out: "hi?the*re,*howdy?,+",
 			},
 			{
 				in:  "((dog+(hotate|TETAHO))|(g*D+(Xpotato|yubiyubi)))",
-				out: "dog,hotate,TETAHO,|,+,g*D/r,Xpotato,yubiyubi,|,+,|",
+				out: "dog,hotate,TETAHO,|,+,g*D,Xpotato,yubiyubi,|,+,|",
 			},
 			{
 				in:  "((hi?the***re+*a?))",
-				out: "hi?the*re/r,*a?/r,+",
+				out: "hi?the*re,*a?,+",
 				evalRPN: []testEvalEntry{
 					{text: "??? hi the huh here's some interrupting text are", shouldMatch: true,
 						strs: []string{"hi the huh here", "??? hi the huh here's some interrupting text ar"}},
@@ -374,8 +456,7 @@ func TestEvalExprToRPN(t *testing.T) {
 		const (
 			// tokenization errors
 			wordErr  = SyntaxError("invalid char in word; must be alphanumeric")
-			wordErr2 = SyntaxError("invalid word; cannot be lone asterisk wildcard")
-			wordErr3 = SyntaxError("invalid word; cannot be lone question wildcard")
+			wordErr2 = SyntaxError("invalid word; cannot only contain wildcards")
 
 			// shunting errors
 			opErr     = SyntaxError("unexpected operator at end of expression, want operand")
@@ -394,9 +475,15 @@ func TestEvalExprToRPN(t *testing.T) {
 			{in: "((dog+(hotate|TETAHO&))|(g*D+(Xpotato|yubiyubi)))", err: wordErr},
 			{in: "hey there", err: wordErr},
 			{in: "one|two+three tree", err: wordErr},
+			{in: "one|two+three&^%tree", err: wordErr},
+			{in: "\\two+thret``=ree", err: wordErr},
 			{in: "(**)", err: wordErr2},
 			{in: "***", err: wordErr2},
-			{in: "?", err: wordErr3},
+			{in: "_", err: wordErr2},
+			{in: "___", err: wordErr2},
+			{in: "?", err: wordErr2},
+			{in: "??", err: wordErr2},
+			{in: "*_?*?", err: wordErr2},
 
 			// the following tests occur during shunting.
 			{in: "", err: opErr},

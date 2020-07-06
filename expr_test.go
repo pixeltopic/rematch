@@ -22,9 +22,9 @@ func TestExpr(t *testing.T) {
 	t.Run("valid expression compiling into RPN and JSON encoding/decoding", func(t *testing.T) {
 		entries := []testExprEntry{
 			{
-				raw:          "!tasty|delish",
-				expectedRPN:  "tasty,!,delish,|",
-				expectedJSON: `{"raw":"!tasty|delish","rpn":[{"s":"tasty","!":true},{"s":"!"},{"s":"delish"},{"s":"|"}],"compiled":true}`,
+				raw:          "!tasty__|delish",
+				expectedRPN:  "tasty_,!,delish,|",
+				expectedJSON: `{"raw":"!tasty|delish","rpn":[{"s":"tasty","!":1,"r":1},{"s":"!"},{"s":"delish"},{"s":"|"}],"compiled":true}`,
 				evalRPN:      []testEvalEntry{},
 			},
 			{
@@ -40,8 +40,8 @@ func TestExpr(t *testing.T) {
 			},
 			{
 				raw:          "((((ch?ips))))|(fish***+(((tasty))))",
-				expectedRPN:  "ch?ips/r,fish*/r,tasty,+,|",
-				expectedJSON: `{"raw":"((((ch?ips))))|(fish***+(((tasty))))","rpn":[{"s":"ch?ips/r"},{"s":"fish*/r"},{"s":"tasty"},{"s":"+"},{"s":"|"}],"compiled":true}`,
+				expectedRPN:  "ch?ips,fish*,tasty,+,|",
+				expectedJSON: `{"raw":"((((ch?ips))))|(fish***+(((tasty))))","rpn":[{"s":"ch?ips","r":1},{"s":"fish*","r":1},{"s":"tasty"},{"s":"+"},{"s":"|"}],"compiled":true}`,
 				evalRPN: []testEvalEntry{
 					{text: "chips fish tasty", shouldMatch: true, strs: []string{"fish", "tasty", "chips"}}, // "fish tasty" is not a returned match because of regex behavior
 					{text: "fish tasty", shouldMatch: true, strs: []string{"fish", "tasty"}},
@@ -105,7 +105,7 @@ func testExprHelper(t *testing.T, i int, entry testExprEntry) {
 			return
 		}
 		if string(jsonBytes) != entry.expectedJSON {
-			t.Errorf("test #%d failed JSON comparison", i+1)
+			t.Errorf("test #%d failed JSON comparison. Should have json='%s', but json='%s'", i+1, entry.expectedJSON, jsonBytes)
 		}
 		return
 	default:
@@ -132,7 +132,7 @@ func testExprHelper(t *testing.T, i int, entry testExprEntry) {
 		return
 	}
 	if string(jsonBytes) != entry.expectedJSON {
-		t.Errorf("test #%d failed JSON comparison", i+1)
+		t.Errorf("test #%d failed JSON comparison. Should have json='%s', but json='%s'", i+1, entry.expectedJSON, jsonBytes)
 	}
 
 	if compiledRPN := strings.Join(tokensToStrs(expr.rpn), ","); compiledRPN != entry.expectedRPN {
