@@ -6,7 +6,7 @@ import (
 	"github.com/pixeltopic/rematch"
 )
 
-const txt = `
+const example = `
 Apples ducks straw, quail a ostriches donkey, hay hook cucumbers. 
 Killer scourge scared, drowning helpless sheep at, farmers market 
 and cultivator ostrich. Combine Harvester swather, baler as haybine 
@@ -24,7 +24,7 @@ is, tool shed horse.`
 func main() {
 
 	rawExprs := []string{
-		"Apples+ostriches",                 // true
+		"ostriches+Apples+horse",           // true
 		"apples+ostriches",                 // false
 		"apples|ostriches",                 // true
 		"Apples|ostriches+apples",          // false
@@ -37,15 +37,11 @@ func main() {
 		"wind*moonshine",                   // true
 	}
 
-	t := rematch.NewText(txt)
+	txt := rematch.NewText(example)
 
 	for _, e := range rawExprs {
-
 		expr := rematch.NewExpr(e)
-
-		res, _ := rematch.FindAll(expr, t)
-
-		fmt.Printf("expr '%s' result: %v %v\n", e, res.Match, res.Strings)
+		res, _ := rematch.FindAll(expr, txt)
+		fmt.Printf("expr '%s' result: %v %v\n", expr.Raw(), res.Match, res.Strings)
 	}
-
 }
