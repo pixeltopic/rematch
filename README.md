@@ -46,9 +46,12 @@ import "github.com/pixeltopic/rematch"
 ### Usage
 
 ```go
-matched, _ := rematch.EvalRawExpr("cow+jumped", "The cow jumped over the moon.")
-fmt.Println(matched)
+// the words "moon" and "cow" must both be present in the string.
+res, _ := rematch.EvalRawExpr("moon+cow", "The cow jumped over the moon.") 
+fmt.Println(res)
 ```
+
+See `/examples` for more.
 
 ## License
 
