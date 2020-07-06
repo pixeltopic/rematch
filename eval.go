@@ -52,7 +52,7 @@ type (
 		Regex  int `json:"r,omitempty"`
 	}
 
-	// tokenAlias is an auxiliary type for aliasing (removing the token unmarshal so stack will not overflow)
+	// tokenAlias is an auxiliary type for aliasing (removing the custom token unmarshal receiver so stack will not overflow)
 	tokenAlias token
 )
 
@@ -84,8 +84,8 @@ func (t *token) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	t.Negate = aux.Negate == 1
-	t.Regex = aux.Regex == 1
+	t.Negate = aux.Negate != 0
+	t.Regex = aux.Regex != 0
 
 	return nil
 }
