@@ -209,10 +209,14 @@ func tokenizeExpr(expr string) ([]token, error) {
 	return tokens, nil
 }
 
-// negateToks tracks whether a token (word or pattern) should be negated in the find output.
+// negateToks tracks whether a word or pattern starting from min should be negated in the find output.
 // parens are not accounted for because they are not included in RPN form.
-// nor are and of the wildcard operator variants handled because they exist as part of patterns.
+// nor are any of the wildcard operator variants handled because they exist as part of patterns.
 func negateToks(min int, rpnTokens []token) {
+
+	// rpnTokens may or may not be completely constructed when this func is run.
+	// it negates a slice of rpnTokens from [min:len(rpnTokens)],
+	// but rpnTokens can have non-negated tokens appended later on in the algorithm execution
 	for i := min; i < len(rpnTokens); i++ {
 		switch rpnTokens[i].Str {
 		case string(opNot):
@@ -269,6 +273,8 @@ func shuntingYard(tokens []token) ([]token, error) {
 			for opStack.Len() > 0 && opStack.Peek() != string(opGroupL) {
 				op := opStack.Pop().(string)
 
+				// for every value in lookbacks, negate all word or patterns up to the current length of rpnTokens. Then flush lookbacks.
+				// this will ensure that only words or patterns within the negation scope will be affected.
 				identifyNegatedToks(op)
 
 				rpnTokens = append(rpnTokens, token{Str: op})
@@ -280,6 +286,11 @@ func shuntingYard(tokens []token) ([]token, error) {
 				return nil, SyntaxError("unexpected negation")
 			}
 			opStack.Push(tok.Str)
+			// keep track of the current index this token corresponds to;
+			// len(rpnTokens) will not be index out of range because there will always be at least
+			// one token that will be appended in the rpnTokens before we iterate with this index.
+			// Note that the lookback slice will only be iterated through when ops are popped
+			// and the op is a NOT op
 			lookbacks = append(lookbacks, len(rpnTokens))
 			state = expectOperand
 		case string(opGroupL):
@@ -308,6 +319,8 @@ func shuntingYard(tokens []token) ([]token, error) {
 				}
 				op := opStack.Pop().(string)
 
+				// for every value in lookbacks, negate all word or patterns up to the current length of rpnTokens. Then flush lookbacks.
+				// this will ensure that only words or patterns within the negation scope will be affected.
 				identifyNegatedToks(op)
 
 				rpnTokens = append(rpnTokens, token{Str: op})
@@ -341,6 +354,8 @@ func shuntingYard(tokens []token) ([]token, error) {
 		case string(opGroupR):
 			return nil, SyntaxError("mismatched parenthesis at end of expression")
 		case string(opNot):
+			// for every value in lookbacks, negate all word or patterns up to the current length of rpnTokens. Then flush lookbacks.
+			// this will ensure that only words or patterns within the negation scope will be affected.
 			identifyNegatedToks(op)
 		}
 
@@ -390,8 +405,6 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 			} else {
 				subr := &subresult{
 					OK: matches && !tok.Negate,
-					// later on in the RPN evaluation, whatever the result of this match will be negated by the ! operator.
-					// we track state earlier and separately from the arg stack (which only stores the boolean output of the expression)
 				}
 
 				if subr.OK {
