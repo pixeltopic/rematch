@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/pixeltopic/rematch/internal/stack"
 )
@@ -19,6 +20,8 @@ const (
 	opWildcardQstn = '?'
 	opNot          = '!'
 	opWildcardSpce = '_'
+	opQuote        = '"'
+	opEscape       = '\\'
 )
 
 // SyntaxError occurs when an expression is malformed.
@@ -111,17 +114,28 @@ func allowedWordChars(c rune) bool {
 		('0' <= c && c <= '9')
 }
 
+func allowedQuotedWordChars(c rune) bool {
+	return !unicode.IsSpace(c)
+}
+
 // tokenizeExpr converts the expression into a string slice of tokens.
 // performs validation on a "word" type token to ensure it does not contain non-alphanumeric characters
 // or only consists of wildcards
 func tokenizeExpr(expr string) ([]token, error) {
 	var (
-		tokens []token
-		word   strings.Builder
-		adjAst bool //adjacent to asterisk wildcard
-		adjWs  bool // adjacent to whitespace wildcard
+		tokens                       []token
+		word                         strings.Builder
+		adjAst                       bool //adjacent to asterisk wildcard
+		adjWs                        bool // adjacent to whitespace wildcard
+		inQuotedWord, inUnquotedWord bool
 	)
 
+	// TODO: check if a word only contains 2 quotes with nothing in between
+	// TODO: test case: "\*\*\_\*\?\?\_\?"
+	// TODO: test case: "\" should err because the end wrapping quote gets escaped
+	// TODO: test case: \"" should err because \ is not alphanumeric
+	// TODO: test case: "foo""bar" would be 2 tokens (this eventually gets evaluated to false later in shunting yard state machine)
+	// TODO: handle escapes here and append word token without quotes; as the later stages need not consider quotes (but RPN eval needs to account for escaped ops)
 	flushWordTok := func() error {
 		if word.Len() != 0 { // no op if word is of length 0, since we flush at the end of tokenization as safety
 
@@ -131,11 +145,7 @@ func tokenizeExpr(expr string) ([]token, error) {
 		WildcardCheck:
 			for i := 0; i < len(tokStr); i++ {
 				switch tokStr[i] {
-				case opWildcardSpce:
-					fallthrough
-				case opWildcardAst:
-					fallthrough
-				case opWildcardQstn:
+				case opWildcardSpce, opWildcardAst, opWildcardQstn:
 					isRegex = true
 				default:
 					valid = true
@@ -165,20 +175,14 @@ func tokenizeExpr(expr string) ([]token, error) {
 
 	for i := 0; i < len(expr); i++ {
 		switch char := rune(expr[i]); char {
-		case opGroupL:
-			fallthrough
-		case opGroupR:
-			fallthrough
-		case opNot:
-			fallthrough
-		case opAnd:
-			fallthrough
-		case opOr:
-			if err := flushWordTok(); err != nil {
-				return nil, err
+		case opGroupL, opGroupR, opNot, opAnd, opOr:
+			if !inQuotedWord {
+				if err := flushWordTok(); err != nil {
+					return nil, err
+				}
+				tokens = append(tokens, token{Str: string(char)})
 			}
-			tokens = append(tokens, token{Str: string(char)})
-			adjAst, adjWs = false, false
+			adjAst, adjWs, inUnquotedWord = false, false, false
 		case opWildcardAst:
 			if !adjAst {
 				word.WriteRune(char)
@@ -194,13 +198,36 @@ func tokenizeExpr(expr string) ([]token, error) {
 				adjWs = true
 			}
 			adjAst = false
-		default:
-			if !allowedWordChars(char) {
-				return nil, SyntaxError("invalid char in word; must be alphanumeric")
+		case opQuote:
+			if inUnquotedWord {
+				if err := flushWordTok(); err != nil {
+					return nil, err
+				}
+				inUnquotedWord = false
 			}
+			word.WriteRune(opQuote)
+			if inQuotedWord {
+				if err := flushWordTok(); err != nil {
+					return nil, err
+				}
+				inQuotedWord = false
+			} else {
+				inQuotedWord = true
+			}
+		default:
+			if !inQuotedWord {
+				inUnquotedWord = true
+				if !allowedWordChars(char) {
+					return nil, SyntaxError("invalid char in word; must be alphanumeric")
+				}
+			}
+
 			word.WriteRune(char)
 			adjAst, adjWs = false, false
 		}
+	}
+	if inQuotedWord {
+		return nil, SyntaxError("mismatched quotations")
 	}
 	if err := flushWordTok(); err != nil {
 		return nil, err
