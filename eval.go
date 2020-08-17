@@ -123,19 +123,13 @@ func allowedQuotedWordChars(c rune) bool {
 // or only consists of wildcards
 func tokenizeExpr(expr string) ([]token, error) {
 	var (
-		tokens                       []token
-		word                         strings.Builder
-		adjAst                       bool //adjacent to asterisk wildcard
-		adjWs                        bool // adjacent to whitespace wildcard
-		inQuotedWord, inUnquotedWord bool
+		tokens                                []token
+		word                                  strings.Builder
+		adjAst                                bool //adjacent to asterisk wildcard
+		adjWs                                 bool // adjacent to whitespace wildcard
+		inQuotedWord, inUnquotedWord, escaped bool
 	)
 
-	// TODO: check if a word only contains 2 quotes with nothing in between
-	// TODO: test case: "\*\*\_\*\?\?\_\?"
-	// TODO: test case: "\" should err because the end wrapping quote gets escaped
-	// TODO: test case: \"" should err because \ is not alphanumeric
-	// TODO: test case: "foo""bar" would be 2 tokens (this eventually gets evaluated to false later in shunting yard state machine)
-	// TODO: handle escapes here and append word token without quotes; as the later stages need not consider quotes (but RPN eval needs to account for escaped ops)
 	flushWordTok := func() error {
 		if word.Len() != 0 { // no op if word is of length 0, since we flush at the end of tokenization as safety
 
@@ -181,29 +175,54 @@ func tokenizeExpr(expr string) ([]token, error) {
 					return nil, err
 				}
 				tokens = append(tokens, token{Str: string(char)})
+			} else {
+				if escaped {
+					return nil, SyntaxError("invalid escape; valid escapes are wildcards, backslash, and double quotes")
+				}
+				word.WriteRune(char)
 			}
 			adjAst, adjWs, inUnquotedWord = false, false, false
 		case opWildcardAst:
 			if !adjAst {
 				word.WriteRune(char)
 				adjAst = true
+			} else if !escaped && inQuotedWord {
+				word.WriteRune(char)
+				adjAst = false
+			} else {
+				if escaped && inQuotedWord {
+					curWord := word.String()[:word.Len()-1] // remove extraneous escape
+					word.Reset()
+					word.WriteString(curWord)
+				}
 			}
-			adjWs = false
+			adjWs, escaped = false, false
 		case opWildcardQstn:
 			word.WriteRune(char)
-			adjAst, adjWs = false, false
+			adjAst, adjWs, escaped = false, false, false
 		case opWildcardSpce:
 			if !adjWs {
 				word.WriteRune(char)
 				adjWs = true
+			} else if !escaped && inQuotedWord {
+				word.WriteRune(char)
+				adjWs = false
+			} else {
+				if escaped && inQuotedWord {
+					curWord := word.String()[:word.Len()-1] // remove extraneous escape
+					word.Reset()
+					word.WriteString(curWord)
+				}
 			}
-			adjAst = false
+			adjAst, escaped = false, false
 		case opQuote:
 			if inUnquotedWord {
-				if err := flushWordTok(); err != nil {
-					return nil, err
-				}
-				inUnquotedWord = false
+				return nil, SyntaxError("invalid char in word; must be alphanumeric")
+			}
+			if escaped {
+				word.WriteRune(opQuote)
+				escaped = false
+				break
 			}
 			word.WriteRune(opQuote)
 			if inQuotedWord {
@@ -214,11 +233,25 @@ func tokenizeExpr(expr string) ([]token, error) {
 			} else {
 				inQuotedWord = true
 			}
+		case opEscape:
+			if inQuotedWord {
+				word.WriteRune(opEscape)
+				escaped = !escaped
+			} else {
+				return nil, SyntaxError("invalid char in word; must be alphanumeric")
+			}
 		default:
 			if !inQuotedWord {
 				inUnquotedWord = true
 				if !allowedWordChars(char) {
 					return nil, SyntaxError("invalid char in word; must be alphanumeric")
+				}
+			} else {
+				if escaped {
+					return nil, SyntaxError("invalid escape; valid escapes are wildcards, backslash, and double quotes")
+				}
+				if !allowedQuotedWordChars(char) {
+					return nil, SyntaxError("invalid whitespace char in word; use escaped whitespace wildcard instead")
 				}
 			}
 
