@@ -44,9 +44,17 @@ type Text struct {
 
 // NewText returns a text instance to match against an Expression.
 func NewText(s string) *Text {
+	sanitizedToks := strings.Fields(replaceNonAlphaNum(s))
+	unsanitizedToks := strings.Fields(s)
+	ts := set.NewStringSet(sanitizedToks...)
+
+	for i := 0; i < len(unsanitizedToks); i++ {
+		ts.Add(unsanitizedToks[i])
+	}
+
 	return &Text{
 		raw:        s,
-		uniqueToks: set.NewStringSet(strings.Fields(replaceNonAlphaNum(s))...),
+		uniqueToks: ts,
 	}
 }
 

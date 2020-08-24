@@ -1,11 +1,24 @@
 package rematch
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
-// tokenizeExpr2 converts the expression into a string slice of tokens.
+func allowedWordChars(c rune) bool {
+	return ('a' <= c && c <= 'z') ||
+		('A' <= c && c <= 'Z') ||
+		('0' <= c && c <= '9')
+}
+
+func allowedQuotedWordChars(c rune) bool {
+	return !unicode.IsSpace(c)
+}
+
+// tokenizeExpr converts the expression into a string slice of tokens.
 // performs validation on a "word" type token to ensure it does not contain non-alphanumeric characters
 // or only consists of wildcards
-func tokenizeExpr2(expr string) ([]token, error) {
+func tokenizeExpr(expr string) ([]token, error) {
 	var (
 		tokens                                []token
 		word                                  strings.Builder
