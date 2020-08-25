@@ -22,6 +22,22 @@ func Test_tokenizeExpr(t *testing.T) {
 			args: args{expr: "\"**\""},
 			want: []token{{Str: "\"**\""}},
 		},
+		{
+			name: "expr with escaped backslash should pass",
+			args: args{expr: "\"\\\\\""},
+			want: []token{{Str: "\"\\\\\""}},
+		},
+		{
+			name: "expr with escaped backslash and regex should pass",
+			args: args{expr: "\"\\\\\\?\""},
+			want: []token{{Str: "\"\\\\\\?\"", Regex: true}},
+		},
+		{
+			name:    "expr with escaped backslash and regex should pass",
+			args:    args{expr: "!\"\\*\\*\\*\\?\""},
+			wantErr: true,
+			err:     SyntaxError("invalid word; cannot only contain wildcards"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
