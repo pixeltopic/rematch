@@ -33,10 +33,46 @@ func Test_tokenizeExpr(t *testing.T) {
 			want: []token{{Str: "\"\\\\\\?\"", Regex: true}},
 		},
 		{
-			name:    "expr with escaped backslash and regex should pass",
+			name: "expr with invalid adjacent operands will not fail and be caught during shunting",
+			args: args{expr: "\"foo\"\"wild\\*card\"\"bar\""},
+			want: []token{{Str: "\"foo\""}, {Str: "\"wild\\*card\"", Regex: true}, {Str: "\"bar\""}},
+		},
+		/* Error tests */
+		{
+			name:    "expr with only escaped wildcards should not pass (1)",
 			args:    args{expr: "!\"\\*\\*\\*\\?\""},
 			wantErr: true,
-			err:     SyntaxError("invalid word; cannot only contain wildcards"),
+			err:     errOnlyWildcards,
+		},
+		{
+			name:    "expr with only escaped wildcards should not pass (2)",
+			args:    args{expr: "!\"\\_\\*\\*\\_\""},
+			wantErr: true,
+			err:     errOnlyWildcards,
+		},
+		{
+			name:    "expr with mismatched quotations should not pass (1)",
+			args:    args{expr: "\""},
+			wantErr: true,
+			err:     errMismatchedQuotations,
+		},
+		{
+			name:    "expr with mismatched quotations should not pass (2)",
+			args:    args{expr: "\"foo"},
+			wantErr: true,
+			err:     errMismatchedQuotations,
+		},
+		{
+			name:    "expr with mismatched quotations should not pass because it is considered unquoted",
+			args:    args{expr: "ddd\""},
+			wantErr: true,
+			err:     errInvalidChar,
+		},
+		{
+			name:    "expr with an empty quoted word should not pass",
+			args:    args{expr: "\"\"+foo"},
+			wantErr: true,
+			err:     SyntaxError("invalid word; no quoted pattern"),
 		},
 	}
 	for _, tt := range tests {
