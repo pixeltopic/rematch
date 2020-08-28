@@ -5,6 +5,12 @@ import (
 	"unicode"
 )
 
+const (
+	errMismatchedQuotations = SyntaxError("mismatched quotations")
+	errOnlyWildcards        = SyntaxError("invalid word; cannot only contain wildcards")
+	errInvalidChar          = SyntaxError("invalid char in word; must be alphanumeric")
+)
+
 func allowedWordChars(c rune) bool {
 	return ('a' <= c && c <= 'z') ||
 		('A' <= c && c <= 'Z') ||
@@ -48,8 +54,9 @@ func tokenizeExpr(expr string) ([]token, error) {
 				return SyntaxError("invalid word; malformed quotes")
 			}
 
+			var i int
 		WildcardCheck:
-			for i := 0; i < len(tokStr); i++ {
+			for ; i < len(tokStr); i++ {
 				switch tokStr[i] {
 				case opQuote:
 					if isQuotedWord {
@@ -91,11 +98,11 @@ func tokenizeExpr(expr string) ([]token, error) {
 			}
 
 			if !valid {
-				return SyntaxError("invalid word; cannot only contain wildcards")
+				return errOnlyWildcards
 			}
 
 			// only do a check if isRegex is not already true in case the WildcardCheck loop terminates early
-			if !isRegex {
+			if !isRegex && i < len(tokStr) {
 				if !isQuotedWord {
 					isRegex = strings.Contains(tokStr, string(opWildcardAst)) ||
 						strings.Contains(tokStr, string(opWildcardQstn)) ||
@@ -178,7 +185,7 @@ func tokenizeExpr(expr string) ([]token, error) {
 			adjAst, escaped = false, false
 		case opQuote:
 			if inUnquotedWord {
-				return nil, SyntaxError("invalid char in word; must be alphanumeric")
+				return nil, errInvalidChar
 			}
 			if escaped {
 				word.WriteRune(opQuote)
@@ -199,13 +206,13 @@ func tokenizeExpr(expr string) ([]token, error) {
 				word.WriteRune(opEscape)
 				escaped = !escaped
 			} else {
-				return nil, SyntaxError("invalid char in word; must be alphanumeric")
+				return nil, errInvalidChar
 			}
 		default:
 			if !inQuotedWord {
 				inUnquotedWord = true
 				if !allowedWordChars(char) {
-					return nil, SyntaxError("invalid char in word; must be alphanumeric")
+					return nil, errInvalidChar
 				}
 			} else {
 				if escaped {
@@ -221,7 +228,7 @@ func tokenizeExpr(expr string) ([]token, error) {
 		}
 	}
 	if inQuotedWord {
-		return nil, SyntaxError("mismatched quotations")
+		return nil, errMismatchedQuotations
 	}
 	if err := flushWordTok(); err != nil {
 		return nil, err
