@@ -3,8 +3,34 @@ package rematch
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+// testStrToTokens is a test helper func that converts a whitespace separated string of (valid) tokens into a slice of token.
+// It will automatically identify regex and set the state accordingly for both quoted and unquoted strings.
+func testStrToTokens(s string) (tokens []token) {
+	if len(s) == 0 {
+		return []token{}
+	}
+	strToks := strings.Fields(s)
+	for _, t := range strToks {
+		var isRegex bool
+		if len(t) >= 2 && t[0] == opQuote && t[len(t)-1] == opQuote {
+			isRegex = strings.Contains(t, string(opEscape)+string(opWildcardAst)) ||
+				strings.Contains(t, string(opEscape)+string(opWildcardQstn)) ||
+				strings.Contains(t, string(opEscape)+string(opWildcardSpce))
+		} else {
+			isRegex = strings.Contains(t, string(opWildcardAst)) ||
+				strings.Contains(t, string(opWildcardQstn)) ||
+				strings.Contains(t, string(opWildcardSpce))
+		}
+		tokens = append(tokens, token{
+			Str: t, Regex: isRegex,
+		})
+	}
+	return
+}
 
 func Test_tokenizeExpr(t *testing.T) {
 	type args struct {
@@ -36,6 +62,34 @@ func Test_tokenizeExpr(t *testing.T) {
 			name: "expr with invalid adjacent operands will not fail and be caught during shunting",
 			args: args{expr: "\"foo\"\"wild\\*card\"\"bar\""},
 			want: []token{{Str: "\"foo\""}, {Str: "\"wild\\*card\"", Regex: true}, {Str: "\"bar\""}},
+		},
+		{
+			name: "short expr with parenthesis and no regex should pass",
+			args: args{expr: "(!(\"mio\"+\"cat\")|\"dog\")"},
+			want: testStrToTokens("( ! ( \"mio\" + \"cat\" ) | \"dog\" )"),
+			// TODO: this should be the RPN form. Rewrite eval_test with this technique and reduce the scope of tests
+			//want: []token{{Str: "\"mio\""}, {Str: "+"}, {Str: "\"cat\""}, {Str: "|"}, {Str: "\"dog\""}, {Str: "|"}},
+		},
+		{
+			name: "long expr with parenthesis and no regex should pass",
+			args: args{expr: "(\"cake\"|(\"foo\"+(\"bar\"|\"bonk\"))|!(\"mio\"|\"mio\"+\"cat\"+\"neo\")|\"dog\")"},
+			want: testStrToTokens("( \"cake\" | ( \"foo\" + ( \"bar\" | \"bonk\" ) ) | ! ( \"mio\" | \"mio\" + \"cat\" + \"neo\" ) | \"dog\" ) "),
+			//want: []token{
+			//	{Str: "\"cake\""},
+			//	{Str: "\"foo\""},
+			//	{Str: "\"bar\""},
+			//	{Str: "\"bonk\""},
+			//	{Str: "|"}, {Str: "+"}, {Str: "|"},
+			//	{Str: "\"mio\""},
+			//	{Str: "\"mio\""},
+			//	{Str: "|"},
+			//	{Str: "\"cat\""},
+			//	{Str: "+"},
+			//	{Str: "\"neo\""},
+			//	{Str: "+"}, {Str: "!"}, {Str: "|"},
+			//	{Str: "\"dog\""},
+			//	{Str: "|"},
+			//},
 		},
 		/* Error tests */
 		{
