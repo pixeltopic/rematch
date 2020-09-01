@@ -343,19 +343,19 @@ func replaceIfRegex(tok token, quotedWord bool) string {
 		repWcSpce = string(opWildcardSpce)
 	)
 	if tok.Regex {
+		parsed := tok.Str
 		if quotedWord {
 			repWcQstn = string(opEscape) + string(opWildcardQstn)
 			repWcAst = string(opEscape) + string(opWildcardAst)
 			repWcSpce = string(opEscape) + string(opWildcardSpce)
-		}
-		parsed := strings.ReplaceAll(tok.Str, repWcQstn, "[\\s\\S]?")
-		parsed = strings.ReplaceAll(parsed, repWcAst, "[\\s\\S]*?")
-		parsed = strings.ReplaceAll(parsed, repWcSpce, "[\\s]*?")
-		if quotedWord {
-			parsed = strings.ReplaceAll(parsed, "\\\\", "\\")
+
+			parsed = strings.ReplaceAll(parsed, "\\\\", "\\") // this needs to happen before the regex replacement(?). test "////*//////*" replacement
 			parsed = strings.ReplaceAll(parsed, "\\\"", "\"")
 			parsed = parsed[1 : len(parsed)-1] // return new string without wrapping quotes
 		}
+		parsed = strings.ReplaceAll(parsed, repWcQstn, "[\\s\\S]?")
+		parsed = strings.ReplaceAll(parsed, repWcAst, "[\\s\\S]*?")
+		parsed = strings.ReplaceAll(parsed, repWcSpce, "[\\s]*?")
 
 		return parsed
 	}
