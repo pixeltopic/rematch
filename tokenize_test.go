@@ -49,6 +49,11 @@ func Test_tokenizeExpr(t *testing.T) {
 			want: []token{{Str: "\"**\""}},
 		},
 		{
+			name: "expr with unsupported quoted word operators should pass",
+			args: args{expr: "\"(+|!)\""},
+			want: testStrToTokens("\"(+|!)\""),
+		},
+		{
 			name: "expr with escaped backslash should pass",
 			args: args{expr: "\"\\\\\""},
 			want: []token{{Str: "\"\\\\\""}},
@@ -59,9 +64,34 @@ func Test_tokenizeExpr(t *testing.T) {
 			want: []token{{Str: "\"\\\\\\?\"", Regex: true}},
 		},
 		{
+			name: "expr with consecutive escapes should pass",
+			args: args{expr: "\"k\\\\e\\\\\\\\k\""},
+			want: testStrToTokens(`"k\\e\\\\k"`),
+		},
+		{
+			name: "expr with consecutive escapes and infix should pass",
+			args: args{expr: "foo+\"k\\\\e\\\"\\\\k\""},
+			want: testStrToTokens("foo + \"k\\\\e\\\"\\\\k\""),
+		},
+		{
+			name: "expr with an infix should pass",
+			args: args{expr: "foo+\"kek\""},
+			want: testStrToTokens(`foo + "kek"`),
+		},
+		{
 			name: "expr with invalid adjacent operands will not fail and be caught during shunting",
 			args: args{expr: "\"foo\"\"wild\\*card\"\"bar\""},
 			want: []token{{Str: "\"foo\""}, {Str: "\"wild\\*card\"", Regex: true}, {Str: "\"bar\""}},
+		},
+		{
+			name: "expr with various combinations of escaped characters should be properly reduced and pass",
+			args: args{expr: "\"\\*\\*\\_\\___**\\**\\**\\_*__\\*\\?\\?\\_\\?\""},
+			want: testStrToTokens("\"\\*\\___**\\**\\**\\_*__\\*\\?\\?\\_\\?\""),
+		},
+		{
+			name: "expr with quoted words should pass",
+			args: args{expr: "\"www\"|\"*^*&^)(@w2\"+foo|bar"},
+			want: testStrToTokens(`"www" | "*^*&^)(@w2" + foo | bar`),
 		},
 		{
 			name: "short expr with parenthesis and no regex should pass",
@@ -117,8 +147,45 @@ func Test_tokenizeExpr(t *testing.T) {
 			err:     errMismatchedQuotations,
 		},
 		{
-			name:    "expr with mismatched quotations should not pass because it is considered unquoted",
+			name:    "expr with escape in unquoted word should fail because it is not alphanumeric",
+			args:    args{expr: "word\\+word"},
+			wantErr: true,
+			err:     errInvalidChar,
+		},
+		{
+			name:    "expr with mismatched quotations should not pass because it is considered unquoted (1)",
 			args:    args{expr: "ddd\""},
+			wantErr: true,
+			err:     errInvalidChar,
+		},
+		{
+			name:    "expr with mismatched quotations should not pass because it is considered unquoted (2)",
+			args:    args{expr: "foo\"bar\"\""},
+			wantErr: true,
+			err:     errInvalidChar,
+		},
+		{
+			name:    "expr with an unquoted word adjacent to quoted word should fail",
+			args:    args{expr: "foo\"bar\""},
+			wantErr: true,
+			err:     errInvalidChar,
+		},
+		{
+			name:    "expr with invalid ^ char should not pass because it is considered unquoted",
+			args:    args{expr: "\"lamy\"|*^*&$)(p0lk@\"+foo|bar"},
+			wantErr: true,
+			err:     errInvalidChar,
+		},
+		{
+			name:    "expr that has an unquoted word leading into a quoted word should not pass. It is an edge case where the reverse will pass.",
+			args:    args{expr: "\"wwww\"fsfd\"*^*&^)(@botw2\"+foo|bar"},
+			wantErr: true,
+			err:     errInvalidChar,
+		},
+		{
+			name: "expr with invalid ^ char and no infix operator between the first 2 tokens should not pass" +
+				"because it is considered unquoted and if characters were valid, would be caught in shunting",
+			args:    args{expr: "\"lamy\"*^*&$)(p0lk@\"+foo|bar"},
 			wantErr: true,
 			err:     errInvalidChar,
 		},
@@ -127,6 +194,30 @@ func Test_tokenizeExpr(t *testing.T) {
 			args:    args{expr: "\"\"+foo"},
 			wantErr: true,
 			err:     SyntaxError("invalid word; no quoted pattern"),
+		},
+		{
+			name:    "expr with quoted token and invalid escaped characters should not pass (1)",
+			args:    args{expr: "\"h\\i\""},
+			wantErr: true,
+			err:     errInvalidEscape,
+		},
+		{
+			name:    "expr with quoted token and invalid escaped characters should not pass (2)",
+			args:    args{expr: "\"\\(\""},
+			wantErr: true,
+			err:     errInvalidEscape,
+		},
+		{
+			name:    "expr with quoted token and invalid escaped characters should not pass (3)",
+			args:    args{expr: "bar+\"foo\\+\""},
+			wantErr: true,
+			err:     errInvalidEscape,
+		},
+		{
+			name:    "expr with quoted token and whitespace in it will fail as the whitespace operator should be used",
+			args:    args{expr: "foo+\"kek\\\"\\\" \""},
+			wantErr: true,
+			err:     errInvalidWs,
 		},
 	}
 	for _, tt := range tests {

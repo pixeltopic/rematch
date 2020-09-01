@@ -9,6 +9,8 @@ const (
 	errMismatchedQuotations = SyntaxError("mismatched quotations")
 	errOnlyWildcards        = SyntaxError("invalid word; cannot only contain wildcards")
 	errInvalidChar          = SyntaxError("invalid char in word; must be alphanumeric")
+	errInvalidEscape        = SyntaxError("invalid escape; valid escapes are wildcards, backslash, and double quotes")
+	errInvalidWs            = SyntaxError("invalid whitespace char in word; use escaped whitespace wildcard instead")
 )
 
 func allowedWordChars(c rune) bool {
@@ -132,7 +134,7 @@ func tokenizeExpr(expr string) ([]token, error) {
 				tokens = append(tokens, token{Str: string(char)})
 			} else {
 				if escaped {
-					return nil, SyntaxError("invalid escape; valid escapes are wildcards, backslash, and double quotes")
+					return nil, errInvalidEscape
 				}
 				word.WriteRune(char)
 			}
@@ -216,10 +218,10 @@ func tokenizeExpr(expr string) ([]token, error) {
 				}
 			} else {
 				if escaped {
-					return nil, SyntaxError("invalid escape; valid escapes are wildcards, backslash, and double quotes")
+					return nil, errInvalidEscape
 				}
 				if !allowedQuotedWordChars(char) {
-					return nil, SyntaxError("invalid whitespace char in word; use escaped whitespace wildcard instead")
+					return nil, errInvalidWs
 				}
 			}
 
