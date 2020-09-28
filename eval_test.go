@@ -154,6 +154,24 @@ func Test_shuntingYard(t *testing.T) {
 				},
 			},
 			{
+				name: "tokenized expr should pass if contains a quoted string (1)",
+				args: args{token: testStrToTokens("\"$GOPATH\"")},
+				want: testStrToTokens("\"$GOPATH\""),
+				eval: []evalCase{
+					{text: "Eventually, $GOPATH will be deprecated in favor of go.mod", matches: []string{"$GOPATH"}},
+					{text: "this is a basic example of some text foo bar"},
+				},
+			},
+			{
+				name: "tokenized expr should pass if contains a quoted string (2)",
+				args: args{token: testStrToTokens(" \"go.mod\" + \"$GOPATH\" | version")},
+				want: testStrToTokens("\"go.mod\" \"$GOPATH\" + version |"),
+				eval: []evalCase{
+					{text: "Eventually, $GOPATH will be deprecated in favor of go.mod", matches: []string{"$GOPATH", "go.mod"}},
+					{text: "The next version of Go may deprecate $gopath", matches: []string{"version"}},
+				},
+			},
+			{
 				name: "tokenized expr should be converted to RPN (1)",
 				args: args{token: testStrToTokens("( hi0 + hi1 | hi2 + hi3 )")},
 				want: testStrToTokens("hi0 hi1 + hi2 | hi3 +"),

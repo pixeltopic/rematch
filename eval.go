@@ -290,9 +290,9 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 				argStack.Push(a || b)
 			}
 		default:
-			matches, s := containsWordOrPattern(replaceIfRegex(tok,
-				len(tok.Str) >= 2 && tok.Str[0] == opQuote && tok.Str[len(tok.Str)-1] == opQuote),
-				tok.Regex, text)
+			isQuoted := len(tok.Str) >= 2 && tok.Str[0] == opQuote && tok.Str[len(tok.Str)-1] == opQuote
+			matches, s := containsWordOrPattern(
+				replaceIfRegex(pruneQuotes(tok, isQuoted), isQuoted), tok.Regex, text)
 			if _, ok := auxResult[str]; ok {
 
 				// only append matched tokens into subresult if it matches and is not negated
@@ -334,6 +334,17 @@ func evalRPN(rpnTokens []token, text *Text) (res *Result, err error) {
 		}
 	}
 	return &result, nil
+}
+
+func pruneQuotes(tok token, quotedWord bool) token {
+	if quotedWord {
+		return token{
+			Str:    tok.Str[1 : len(tok.Str)-1],
+			Negate: tok.Negate,
+			Regex:  tok.Regex,
+		}
+	}
+	return tok
 }
 
 func replaceIfRegex(tok token, quotedWord bool) string {
