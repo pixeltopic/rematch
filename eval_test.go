@@ -71,27 +71,76 @@ func Test_shuntingYard(t *testing.T) {
 		}
 		// eval evaluates the text against the shunting test "want" result
 		type evalCase struct {
-			text      string
-			wantMatch bool
-			wantErr   bool
-			err       error
-			matches   []string // set of strings of matches.
+			text    string
+			wantErr bool
+			err     error
+			matches []string // set of strings of matches. If len > 0; will declare that this case should match with the RPN output
 		}
-
-		tests := []struct {
+		type shuntCase struct {
 			name    string
 			args    args
 			want    []token
 			wantErr bool
 			err     error
 			eval    []evalCase
-		}{
+		}
+
+		testHelper := func(t *testing.T, tt shuntCase) {
+			got, err := shuntingYard(tt.args.token)
+			if err != nil {
+				if tt.wantErr && !errors.Is(err, tt.err) {
+					t.Errorf("shuntingYard() error=%v, expected error=%v", err, tt.err)
+					return
+				}
+				if !tt.wantErr {
+					t.Errorf("shuntingYard() error=%v, wantErr=%v", err, tt.wantErr)
+					return
+				}
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("shuntingYard() got=%v, want=%v", got, tt.want)
+				return
+			}
+
+			for _, c := range tt.eval {
+				res, err := evalRPN(tt.want, NewText(c.text))
+				switch err.(type) {
+				case nil:
+					if c.wantErr {
+						t.Errorf("evalRPN() got=%v, want=%v", err, c.err)
+						continue
+					}
+				default:
+					if !c.wantErr {
+						t.Errorf("evalRPN() got=%v, want=%v", err, c.err)
+						continue
+					} else {
+						if !errors.Is(err, c.err) {
+							t.Errorf("evalRPN() got=%v, want=%v", err, c.err)
+							continue
+						}
+					}
+				}
+
+				if (len(c.matches) != 0) && !res.Match {
+					t.Errorf("evalRPN() got=%v, want=%v", res.Match, len(c.matches) != 0)
+					continue
+				} else {
+					if !testUnorderedSliceEq(c.matches, res.Strings) {
+						t.Errorf("evalRPN() got=%v, want=%v", res.Strings, c.matches)
+					}
+				}
+			}
+		}
+
+		// simple tests with parens but no regex functionality or negations
+		basicTests := []shuntCase{
 			{
 				name: "tokenized expr should pass if it only has one word",
 				args: args{token: testStrToTokens("Foo")},
 				want: testStrToTokens("Foo"),
 				eval: []evalCase{
-					{text: "this is a basic example of some text Foo bar", wantMatch: true, matches: []string{"Foo"}},
+					{text: "this is a basic example of some text Foo bar", matches: []string{"Foo"}},
 					{text: "this is a basic example of some text foo bar"},
 				},
 			},
@@ -100,75 +149,81 @@ func Test_shuntingYard(t *testing.T) {
 				args: args{token: testStrToTokens("( ( Foo ) )")},
 				want: testStrToTokens("Foo"),
 				eval: []evalCase{
-					{text: "this is a basic example of some text Foo bar", wantMatch: true, matches: []string{"Foo"}},
+					{text: "this is a basic example of some text Foo bar", matches: []string{"Foo"}},
 					{text: "this is a basic example of some text foo bar"},
 				},
 			},
 			{
-				name: "tokenized expr should be converted to RPN",
+				name: "tokenized expr should be converted to RPN (1)",
+				args: args{token: testStrToTokens("( hi0 + hi1 | hi2 + hi3 )")},
+				want: testStrToTokens("hi0 hi1 + hi2 | hi3 +"),
+			},
+			{
+				name: "tokenized expr should be converted to RPN (2)",
+				args: args{token: testStrToTokens("( hi ) | ( ( guys + hows + it + going ) )")},
+				want: testStrToTokens("hi guys hows + it + going + |"),
+			},
+			{
+				name: "tokenized expr should be converted to RPN (3)",
 				args: args{token: testStrToTokens("barfoo | ( foobar )")},
 				want: testStrToTokens("barfoo foobar |"),
 				eval: []evalCase{
-					{text: "this is a basic example of some text foobar", wantMatch: true, matches: []string{"foobar"}},
-					{text: "this is a barfoo basic example of some text foo bar", wantMatch: true, matches: []string{"barfoo"}},
+					{text: "this is a basic example of some text foobar", matches: []string{"foobar"}},
+					{text: "this is a barfoo basic example of some text foo bar", matches: []string{"barfoo"}},
 					{text: "this is a bar foo basic example of some text foo bar"},
 					{text: "this is a basic example foo of some text bar"},
 				},
 			},
+			{
+				name: "tokenized expr should be converted to RPN and evaluated from left to right",
+				args: args{token: testStrToTokens("dog | mio + FBK")},
+				want: testStrToTokens("dog mio | FBK +"),
+				eval: []evalCase{
+					{text: "mio FBK rta inc", matches: []string{"mio", "FBK"}},
+					{text: "mio and FBK + dog", matches: []string{"dog", "mio", "FBK"}},
+					{text: "dog mio some other stuff mio"}, // true || true && false == false
+				},
+			},
+			{
+				name: "tokenized expr should be converted to RPN and evaluated from left to right but prioritize parens (1)",
+				args: args{token: testStrToTokens("dog | ( mio + FBK )")},
+				want: testStrToTokens("dog mio FBK + |"),
+				eval: []evalCase{
+					{text: "mio FBK rta inc", matches: []string{"mio", "FBK"}},
+					{text: "mio and FBK + dog", matches: []string{"dog", "mio", "FBK"}},
+					{text: "dog mio some other stuff mio", matches: []string{"dog", "mio"}}, // true || (true && false) == true
+				},
+			},
+			{
+				name: "tokenized expr should be converted to RPN and evaluated from left to right but prioritize parens (2)",
+				args: args{token: testStrToTokens("( dog | ( mio + cat ) ) | ( FBK + fox )")},
+				want: testStrToTokens("dog mio cat + | FBK fox + |"),
+				eval: []evalCase{
+					{text: "fox"},
+					{text: "fbk fox"},
+					{text: "fox FBK", matches: []string{"fox", "FBK"}},
+					{text: "dog", matches: []string{"dog"}},
+					{text: "cat lel mio", matches: []string{"cat", "mio"}},
+				},
+			},
+		}
+		for _, tc := range basicTests {
+			t.Run(tc.name, func(t *testing.T) {
+				testHelper(t, tc)
+			})
+		}
+
+		testsWithNegations := []shuntCase{
 			{
 				name: "tokenized expr should pass if it only has one word",
 				args: args{token: testStrToTokens("! Foo")},
 				want: []token{{Str: "Foo", Negate: true}, {Str: "!"}},
 			},
 		}
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				got, err := shuntingYard(tt.args.token)
-				if err != nil {
-					if tt.wantErr && !errors.Is(err, tt.err) {
-						t.Errorf("shuntingYard() error=%v, expected error=%v", err, tt.err)
-						return
-					}
-					if !tt.wantErr {
-						t.Errorf("shuntingYard() error=%v, wantErr=%v", err, tt.wantErr)
-						return
-					}
-				}
-				if !reflect.DeepEqual(got, tt.want) {
-					t.Errorf("shuntingYard() got=%v, want=%v", got, tt.want)
-					return
-				}
 
-				for _, c := range tt.eval {
-					res, err := evalRPN(tt.want, NewText(c.text))
-					switch err.(type) {
-					case nil:
-						if c.wantErr {
-							t.Errorf("evalRPN() got=%v, want=%v", err, c.err)
-							continue
-						}
-					default:
-						if !c.wantErr {
-							t.Errorf("evalRPN() got=%v, want=%v", err, c.err)
-							continue
-						} else {
-							if !errors.Is(err, c.err) {
-								t.Errorf("evalRPN() got=%v, want=%v", err, c.err)
-								continue
-							}
-						}
-					}
-
-					if c.wantMatch != res.Match {
-						t.Errorf("evalRPN() got=%v, want=%v", res.Match, c.wantMatch)
-						continue
-					} else {
-						if !testUnorderedSliceEq(c.matches, res.Strings) {
-							t.Errorf("evalRPN() got=%v, want=%v", res.Strings, c.matches)
-						}
-					}
-
-				}
+		for _, tc := range testsWithNegations {
+			t.Run(tc.name, func(t *testing.T) {
+				testHelper(t, tc)
 			})
 		}
 	})
@@ -176,55 +231,6 @@ func Test_shuntingYard(t *testing.T) {
 
 // this test suite tests expression conversion to reverse polish notation and evaluation of rpn form against test inputs
 func TestEvalExprToRPN(t *testing.T) {
-	// simple tests with parens but no regex functionality or negations
-	t.Run("basic valid expressions", func(t *testing.T) {
-		entries := []testEntry{
-			{
-				in:  "dog|mio+FBK",
-				out: "dog,mio,|,FBK,+",
-				evalRPN: []testEvalEntry{
-					{text: "mio FBK collab when", shouldMatch: true, strs: []string{"mio", "FBK"}},
-					{text: "mio FBK collab when and dog", shouldMatch: true, strs: []string{"dog", "mio", "FBK"}},
-					{text: "dog mio some other stuff mio", shouldMatch: false}, // true || true && false == false
-				},
-			},
-			{
-				in:  "dog|(mio+FBK)",
-				out: "dog,mio,FBK,+,|",
-				evalRPN: []testEvalEntry{
-					{text: "mio FBK collab when", shouldMatch: true, strs: []string{"mio", "FBK"}},
-					{text: "mio FBK collab when and dog", shouldMatch: true, strs: []string{"dog", "mio", "FBK"}},
-					{text: "dog mio some other stuff mio", shouldMatch: true, strs: []string{"dog", "mio"}}, // true || (true && false) == true
-				},
-			},
-			{
-				in:  "(dog|(mio+cat))|(FBK+fox)",
-				out: "dog,mio,cat,+,|,FBK,fox,+,|",
-				evalRPN: []testEvalEntry{
-					{text: "fox", shouldMatch: false},
-					{text: "fbk fox", shouldMatch: false},
-					{text: "fox FBK", shouldMatch: true, strs: []string{"fox", "FBK"}},
-					{text: "dog", shouldMatch: true, strs: []string{"dog"}},
-					{text: "cat lel mio", shouldMatch: true, strs: []string{"cat", "mio"}},
-				},
-			},
-			{
-				in:  "(hi0+hi1|hi2+hi3)",
-				out: "hi0,hi1,+,hi2,|,hi3,+",
-			},
-			{
-				in:  "(hi)|((guys+hows+it+going))",
-				out: "hi,guys,hows,+,it,+,going,+,|",
-			},
-		}
-
-		for i, entry := range entries {
-			t.Run("should all pass", func(t *testing.T) {
-				testEvalHelper(t, i, entry)
-			})
-		}
-	})
-
 	t.Run("valid expressions with negations", func(t *testing.T) {
 		entries := []testEntry{
 			{
