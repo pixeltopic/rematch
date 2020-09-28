@@ -9,6 +9,7 @@ import (
 
 // testStrToTokens is a test helper func that converts a whitespace separated string of (valid) tokens into a slice of token.
 // It will automatically identify regex and set the state accordingly for both quoted and unquoted strings.
+// This function does not work if there are negated tokens.
 func testStrToTokens(s string) (tokens []token) {
 	if len(s) == 0 {
 		return []token{}

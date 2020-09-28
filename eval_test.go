@@ -63,37 +63,122 @@ func testUnorderedSliceEq(a, b []string) bool {
 	return reflect.DeepEqual(aCopy, bCopy)
 }
 
+func Test_shuntingYard(t *testing.T) {
+
+	t.Run("basic valid expressions", func(t *testing.T) {
+		type args struct {
+			token []token
+		}
+		// eval evaluates the text against the shunting test "want" result
+		type evalCase struct {
+			text      string
+			wantMatch bool
+			wantErr   bool
+			err       error
+			matches   []string // set of strings of matches.
+		}
+
+		tests := []struct {
+			name    string
+			args    args
+			want    []token
+			wantErr bool
+			err     error
+			eval    []evalCase
+		}{
+			{
+				name: "tokenized expr should pass if it only has one word",
+				args: args{token: testStrToTokens("Foo")},
+				want: testStrToTokens("Foo"),
+				eval: []evalCase{
+					{text: "this is a basic example of some text Foo bar", wantMatch: true, matches: []string{"Foo"}},
+					{text: "this is a basic example of some text foo bar"},
+				},
+			},
+			{
+				name: "tokenized expr should pass if it only has one parenthesis wrapped word",
+				args: args{token: testStrToTokens("( ( Foo ) )")},
+				want: testStrToTokens("Foo"),
+				eval: []evalCase{
+					{text: "this is a basic example of some text Foo bar", wantMatch: true, matches: []string{"Foo"}},
+					{text: "this is a basic example of some text foo bar"},
+				},
+			},
+			{
+				name: "tokenized expr should be converted to RPN",
+				args: args{token: testStrToTokens("barfoo | ( foobar )")},
+				want: testStrToTokens("barfoo foobar |"),
+				eval: []evalCase{
+					{text: "this is a basic example of some text foobar", wantMatch: true, matches: []string{"foobar"}},
+					{text: "this is a barfoo basic example of some text foo bar", wantMatch: true, matches: []string{"barfoo"}},
+					{text: "this is a bar foo basic example of some text foo bar"},
+					{text: "this is a basic example foo of some text bar"},
+				},
+			},
+			{
+				name: "tokenized expr should pass if it only has one word",
+				args: args{token: testStrToTokens("! Foo")},
+				want: []token{{Str: "Foo", Negate: true}, {Str: "!"}},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got, err := shuntingYard(tt.args.token)
+				if err != nil {
+					if tt.wantErr && !errors.Is(err, tt.err) {
+						t.Errorf("shuntingYard() error=%v, expected error=%v", err, tt.err)
+						return
+					}
+					if !tt.wantErr {
+						t.Errorf("shuntingYard() error=%v, wantErr=%v", err, tt.wantErr)
+						return
+					}
+				}
+				if !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("shuntingYard() got=%v, want=%v", got, tt.want)
+					return
+				}
+
+				for _, c := range tt.eval {
+					res, err := evalRPN(tt.want, NewText(c.text))
+					switch err.(type) {
+					case nil:
+						if c.wantErr {
+							t.Errorf("evalRPN() got=%v, want=%v", err, c.err)
+							continue
+						}
+					default:
+						if !c.wantErr {
+							t.Errorf("evalRPN() got=%v, want=%v", err, c.err)
+							continue
+						} else {
+							if !errors.Is(err, c.err) {
+								t.Errorf("evalRPN() got=%v, want=%v", err, c.err)
+								continue
+							}
+						}
+					}
+
+					if c.wantMatch != res.Match {
+						t.Errorf("evalRPN() got=%v, want=%v", res.Match, c.wantMatch)
+						continue
+					} else {
+						if !testUnorderedSliceEq(c.matches, res.Strings) {
+							t.Errorf("evalRPN() got=%v, want=%v", res.Strings, c.matches)
+						}
+					}
+
+				}
+			})
+		}
+	})
+}
+
 // this test suite tests expression conversion to reverse polish notation and evaluation of rpn form against test inputs
 func TestEvalExprToRPN(t *testing.T) {
 	// simple tests with parens but no regex functionality or negations
 	t.Run("basic valid expressions", func(t *testing.T) {
 		entries := []testEntry{
-			{
-				in:  "Foo",
-				out: "Foo",
-				evalRPN: []testEvalEntry{
-					{text: "this is a basic example of some text Foo bar", shouldMatch: true, strs: []string{"Foo"}},
-					{text: "this is a basic example of some text foo bar", shouldMatch: false},
-				},
-			},
-			{
-				in:  "((Foo))",
-				out: "Foo",
-				evalRPN: []testEvalEntry{
-					{text: "this is a basic example of some text Foo bar", shouldMatch: true, strs: []string{"Foo"}},
-					{text: "this is a basic example of some text foo bar", shouldMatch: false},
-				},
-			},
-			{
-				in:  "barfoo|(foobar)",
-				out: "barfoo,foobar,|",
-				evalRPN: []testEvalEntry{
-					{text: "this is a basic example of some text foobar", shouldMatch: true, strs: []string{"foobar"}},
-					{text: "this is a barfoo basic example of some text foo bar", shouldMatch: true, strs: []string{"barfoo"}},
-					{text: "this is a bar foo basic example of some text foo bar", shouldMatch: false},
-					{text: "this is a basic example foo of some text bar", shouldMatch: false},
-				},
-			},
 			{
 				in:  "dog|mio+FBK",
 				out: "dog,mio,|,FBK,+",
